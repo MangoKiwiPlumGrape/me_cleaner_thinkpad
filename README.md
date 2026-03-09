@@ -136,6 +136,45 @@ Verified via byte-level diff of stock vs Intel FIT-patched BIOS on ThinkPad 10th
 
 ---
 
+## What Happens After Setting HAP
+
+Once the patched BIOS is flashed, the Intel ME halts itself immediately after hardware initialisation. No tool, driver or OS interface can communicate with it.
+
+### BIOS / Firmware
+- ME version field is **empty/blank**
+- No ME information is displayed anywhere in the BIOS
+
+### lspci
+```bash
+$ lspci | grep -i "mei\|management engine\|heci"
+# returns nothing
+```
+
+### Intel MEInfo
+```bash
+$ sudo ./MEInfo
+# returns nothing — no ME interface to talk to
+```
+
+### intelmetool
+```bash
+$ sudo intelmetool -m
+# returns nothing — no ME interface to talk to
+```
+
+### MEAnalyzer
+Cannot communicate with the live ME. Can still parse the BIOS **file** and will confirm `HAP/AltMeDisable: Yes`.
+
+### Summary
+| Tool | Before HAP | After HAP |
+|---|---|---|
+| BIOS ME version | 14.x.x.x | **blank** |
+| `lspci` | visible | **nothing** |
+| MEInfo | returns ME data | **nothing** |
+| intelmetool | returns ME data | **nothing** |
+| MEAnalyzer (file) | HAP = No | HAP = Yes |
+| Any ME tool (live) | functional | **no device to bind to** |
+
 ## License
 
 GNU General Public License v3 — see [LICENSE](LICENSE) for full terms.  
