@@ -175,6 +175,65 @@ Cannot communicate with the live ME. Can still parse the BIOS **file** and will 
 | MEAnalyzer (file) | HAP = No | HAP = Yes |
 | Any ME tool (live) | functional | **no device to bind to** |
 
+## Deep Dive: What Intel FIT Actually Does for HAP (CML-LP Research)
+
+During development of this fork, a byte-level analysis was performed comparing a stock BIOS dump against an Intel FIT (Flash Image Tool) HAP-patched image on a 10th gen ThinkPad (Comet Lake LP, ME 14.1.x, vPro). The findings are documented here for anyone doing ME research.
+
+### The Simple Truth First
+
+**A single byte change is sufficient to set HAP and disable ME on CML-LP.**
+
+This fork changes exactly 1 byte — `PCHSTRP28` at `fpsba+0x70`, bit 16. After flashing, ME disappears from the BIOS, lspci, and all ME tools. Intel FIT changes 534 bytes for the same operation. Here is why.
+
+### What FIT Changes Beyond the HAP Bit
+
+Running `cmp -l` between stock and FIT-patched images revealed four distinct categories of changes:
+
+**1. HAP bit — `fpsba+0x70` bit 16 (byte 371 / `0x173`)**
+The primary HAP trigger. Sets PCHSTRP28 bit 16 in the flash descriptor PCH strap area.
+```
+stock:   PCHSTRP28 = 0x801801b8
+patched: PCHSTRP28 = 0x801901b8
+diff:              = 0x00010000  ← exactly one bit
+```
+
+**2. Descriptor metadata — version/sequence counters updated in 3 regions**
+FIT updates a version counter, sequence number and size field at the same relative offsets inside three separate firmware regions (`0x4000`, `0x157000`, `0x63f000`). The same 4-byte pattern changes identically across all three:
+```
++0x12: 0x00 → 0x01  (sequence counter increment)
++0x14: 0x2d → 0x3c  (size/length field)
++0x16: 0x6d → 0xfe  (size/length field continued)
++0x17: 0x05 → 0x06  (version bump)
+```
+
+**3. Checksums recalculated**
+FIT recalculates checksums for each modified region:
+- Two EFI firmware volumes (`0x4000`, `0x157000`) — 16-bit checksums updated at `+0x0a/0x0b`
+- FPT header (`0x63f000`) — 8-bit checksum updated at `+0x0b`
+
+**4. ME provisioning block wiped — `0x786000`–`0x786208` (519 bytes → `0xFF`)**
+FIT completely erases a 519-byte region to flash-erased state (`0xFF`). Stock content of this region begins `0x00 0x00 0x00 0x00 0x02 0x7e...` suggesting it contains provisioning tokens or manufacturing data.
+
+### Why the Extra Changes Don't Affect HAP
+
+This fork proves that changes 2, 3 and 4 are **not required** for HAP to take effect. ME disappears with only the single bit flip. FIT performs these additional operations as part of its broader image integrity maintenance — keeping descriptors consistent, checksums valid, and provisioning data clean.
+
+### The vPro / AMT Angle
+
+The platform tested here is a **vPro system with Intel AMT**. The provisioning block being wiped (`0x786000`) is almost certainly related to AMT provisioning state — FIT invalidates it when HAP is set because a HAP-disabled ME cannot run AMT regardless of provisioning status. This is consistent with Intel's documented behaviour that HAP puts ME into a halted state before AMT or any other ME application can initialise.
+
+The version counter and checksum updates in the EFI firmware volumes may be Intel Boot Guard or CSME descriptor integrity records — FIT maintains these to keep the image in a consistent state even after modification. On non-vPro or non-AMT systems these regions may differ or be absent entirely.
+
+### Takeaway for Researchers
+
+If you are doing ME research on CML-LP or similar IFWI platforms:
+
+- The HAP bit location can be confirmed by diffing stock vs FIT-patched images with `cmp -l` and cross-referencing with `fpsba` from the flash descriptor
+- FIT changes significantly more than just the HAP bit — not all of those changes are required for HAP to take effect
+- The provisioning block wipe suggests FIT is doing AMT cleanup as a side effect of HAP, not as a hard requirement
+- Always verify with `cmp -l` on your specific platform — strap locations are not universal across Intel generations
+- On non-vPro platforms the provisioning block and EFI volume changes may be absent entirely
+
 ## License
 
 GNU General Public License v3 — see [LICENSE](LICENSE) for full terms.  
