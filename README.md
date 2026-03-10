@@ -20,10 +20,14 @@
 
 </div>
 
+
+>  **Experimental support for ME 15–18 (Tiger Lake, Alder Lake, Raptor Lake, Meteor Lake) is available.**
+> See [experimental/README](experimental/README) — community confirmed, not yet hardware tested. Reports welcome.
+
 ---
 For a detailed comparison of HAP vs soft-disable effectiveness across hardware generations, see [ME_Disable_Comparison.md](ME_Disable_Comparison.md). 
 
-> Fork of [corna/me_cleaner](https://github.com/corna/me_cleaner) focused on **correctly setting the HAP (High Assurance Platform) bit** on Intel platforms from 8th through 14th generation, with hardware-confirmed offsets for ThinkPad LP/U-series and Other machines,  Results in ME non functional i.e no version displayed in Bios and tools are unable to communicate with the MEI via interfaces etc.
+
 
 ---
 
