@@ -14,7 +14,7 @@
 # GNU General Public License for more details.
 #
 # ============================================================
-# FORK PATCHES (on top of original me_cleaner v1.2):
+# FORK PATCHES (on top of modified me_cleaner v1.3):
 #
 #  1. ME 12 LP (Whiskey Lake / Coffee Lake U) — HAP at fpsba+0x70, bit 16
 #     ME 12 H  (Cannon Lake H / Z390 etc.)   — HAP at fpsba+0x80, bit 16
