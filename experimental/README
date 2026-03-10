@@ -1,0 +1,16 @@
+# Experimental
+
+Contains extended platform support that is community-confirmed but 
+not yet hardware-tested by this repo's maintainer.
+
+## me_cleaner_experimental.py
+
+Adds on top of the stable fork:
+
+- **ME 15 (Tiger Lake)** — HAP at `fpsba+0x7C` PCHSTRP31, community confirmed
+- **ME 16 / 16.1 (Alder Lake / Raptor Lake)** — HAP in Flash Descriptor 
+  offset `0x017E`, community confirmed. Previous guess of `fpsba+0xDC` was wrong.
+- **ME 18 (Meteor Lake)** — same as ADL/RPL, descriptor `0x017E`
+
+Use at your own risk. If you test this and it works, please open an issue 
+and report your platform and ME version so it can be promoted to stable.
