@@ -1,5 +1,26 @@
-# me_cleaner v1.3 2026 — HAP Soft-Disable Fork (8th–14th Gen Intel)
 
+<div align="center">
+
+#  me_cleaner v1.3 — HAP / Soft-Disable Fork
+### Hardware-confirmed Intel ME disable for 8th–14th Gen Intel platforms
+
+[![ME 12](https://img.shields.io/badge/ME%2012-confirmed-brightgreen?style=flat-square&logo=intel)](https://github.com/your-username/me_cleaner-thinkpad)
+[![ME 13](https://img.shields.io/badge/ME%2013-confirmed-brightgreen?style=flat-square&logo=intel)](https://github.com/your-username/me_cleaner-thinkpad)
+[![ME 14](https://img.shields.io/badge/ME%2014-confirmed-brightgreen?style=flat-square&logo=intel)](https://github.com/your-username/me_cleaner-thinkpad)
+[![ME 15](https://img.shields.io/badge/ME%2015-experimental-orange?style=flat-square&logo=intel)](https://github.com/your-username/me_cleaner-thinkpad/tree/main/experimental)
+[![ME 16](https://img.shields.io/badge/ME%2016-experimental-orange?style=flat-square&logo=intel)](https://github.com/your-username/me_cleaner-thinkpad/tree/main/experimental)
+[![ME 18](https://img.shields.io/badge/ME%2018-experimental-orange?style=flat-square&logo=intel)](https://github.com/your-username/me_cleaner-thinkpad/tree/main/experimental)
+
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue?style=flat-square)](https://www.gnu.org/licenses/gpl-3.0)
+[![Fork of](https://img.shields.io/badge/fork%20of-corna%2Fme__cleaner-lightgrey?style=flat-square)](https://github.com/corna/me_cleaner)
+[![Hardware Tested](https://img.shields.io/badge/hardware-tested%20%26%20flashed-success?style=flat-square)](https://github.com/your-username/me_cleaner-thinkpad)
+[![Year](https://img.shields.io/badge/updated-2026-informational?style=flat-square)](https://github.com/your-username/me_cleaner-thinkpad)
+
+> **Fork of [corna/me_cleaner](https://github.com/corna/me_cleaner) fixing HAP bit offsets for 8th–10th gen Intel platforms, with experimental support up to 14th gen (Meteor Lake). All stable fixes hardware-confirmed on real ThinkPad hardware.**
+
+</div>
+
+---
 For a detailed comparison of HAP vs soft-disable effectiveness across hardware generations, see [ME_Disable_Comparison.md](ME_Disable_Comparison.md). 
 
 > Fork of [corna/me_cleaner](https://github.com/corna/me_cleaner) focused on **correctly setting the HAP (High Assurance Platform) bit** on Intel platforms from 8th through 14th generation, with hardware-confirmed offsets for ThinkPad LP/U-series and Other machines,  Results in ME non functional i.e no version displayed in Bios and tools are unable to communicate with the MEI via interfaces etc.
