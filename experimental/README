@@ -1,16 +1,133 @@
-# Experimental
+# Experimental Platform Support 
 
-Contains extended platform support that is community-confirmed but 
-not yet hardware-tested by this repo's maintainer.
+This folder contains extended platform support that goes beyond the
+hardware-confirmed fixes in the main `me_cleaner.py`. The changes here
+are based on community reverse engineering and consensus — not direct
+hardware flashing by this repo's maintainer.
+
+**Use at your own risk. Always make a full backup of your firmware before
+flashing. An incorrect HAP patch that silently writes to the wrong location
+will appear to succeed but ME will not be disabled.**
+
+---
 
 ## me_cleaner_experimental.py
 
-Adds on top of the stable fork:
+A drop-in replacement for `me_cleaner.py` that adds support for newer
+Intel platforms on top of the stable hardware-confirmed fork.
 
-- **ME 15 (Tiger Lake)** — HAP at `fpsba+0x7C` PCHSTRP31, community confirmed
-- **ME 16 / 16.1 (Alder Lake / Raptor Lake)** — HAP in Flash Descriptor 
-  offset `0x017E`, community confirmed. Previous guess of `fpsba+0xDC` was wrong.
-- **ME 18 (Meteor Lake)** — same as ADL/RPL, descriptor `0x017E`
+### What's in the stable fork (unchanged here)
 
-Use at your own risk. If you test this and it works, please open an issue 
-and report your platform and ME version so it can be promoted to stable.
+| ME Version | Platform | HAP Location | Status |
+|-----------|----------|-------------|--------|
+| ME 12 LP | Cannon Lake / Whiskey Lake (8th/9th gen) | `fpsba+0x70` PCHSTRP28 bit 16 | ✅ Hardware confirmed |
+| ME 12 H | Cannon Lake H / Z390 desktop | `fpsba+0x80` PCHSTRP32 bit 16 | ✅ Hardware confirmed |
+| ME 13 | Ice Lake (10th gen LP) | `fpsba+0x70` PCHSTRP28 bit 16 | ✅ Community confirmed |
+| ME 14 | Comet Lake LP (10th gen) | `fpsba+0x70` PCHSTRP28 bit 16 | ✅ Hardware confirmed |
+
+### What's new and experimental
+
+| ME Version | Platform | HAP Location | Status |
+|-----------|----------|-------------|--------|
+| ME 15 | Tiger Lake (11th gen) | `fpsba+0x7C` PCHSTRP31 bit 16 | ⚠️ Community confirmed, not hw tested here |
+| ME 16 | Alder Lake (12th gen) | Flash Descriptor offset `0x017E` byte `0x01` | ⚠️ Community confirmed, not hw tested here |
+| ME 16.1 | Raptor Lake (13th gen) | Flash Descriptor offset `0x017E` byte `0x01` | ⚠️ Community confirmed, not hw tested here |
+| ME 18 | Meteor Lake (Core Ultra) | Flash Descriptor offset `0x017E` byte `0x01` | ⚠️ Community confirmed, not hw tested here |
+
+### Key change for ADL/RPL/MTL (ME 16+)
+
+On Alder Lake and newer, Intel moved the HAP bit **out of PCHSTRP
+entirely**. It is no longer a strap bit — it is a byte in the Flash
+Descriptor itself at offset `0x017E`. Setting this byte to `0x01` enables
+HAP and disables ME.
+
+Previous community guesses (including `fpsba+0xDC` from XutaxKamay's
+PR #384) were incorrect. The descriptor-based location has since been
+confirmed by multiple community members independently.
+
+---
+
+## Usage
+
+Identical to the original me_cleaner — it is a single Python file with no
+extra dependencies:
+
+```bash
+# Set HAP only (recommended for IFWI firmware — newer platforms)
+python3 me_cleaner_experimental.py -s firmware.bin -O firmware_hap.bin
+
+# Set HAP and strip modules (older platforms only — not for IFWI)
+python3 me_cleaner_experimental.py -S firmware.bin -O firmware_hap.bin
+
+# Check status only — does not modify anything
+python3 me_cleaner_experimental.py --check firmware.bin
+```
+
+> **Note:** On gen 4+ (ME 12 and newer) the tool automatically detects
+> IFWI firmware format and skips module stripping with a warning, only
+> setting the HAP bit. This is the correct and safe behaviour for modern
+> ThinkPads and other IFWI-based platforms.
+
+---
+
+## How to verify it worked (without flashing)
+
+After running the tool, check with MEAnalyzer before you flash anything:
+
+```
+MEAnalyzer.py firmware_hap.bin
+```
+
+Look for:
+
+```
+HAP/AltMeDisable: Yes
+```
+
+If it says `No` — the patch did not apply correctly. Do not flash.
+
+---
+
+## After flashing — how to confirm ME is disabled
+
+```bash
+# Should return nothing on a fully disabled machine
+lspci | grep -i mei
+
+# Will report "ME not present" or exit immediately if MEI is gone
+sudo ./intelmetool -m
+```
+
+On 8th gen+ ThinkPads with HAP correctly set:
+- `lspci` returns nothing for MEI
+- BIOS ME version field is blank
+- intelmetool cannot find a device to talk to
+
+This is the expected and correct result. See
+[ME_Disable_Comparison.md](../ME_Disable_Comparison.md) for a detailed
+explanation of why newer platforms show a more complete hardware-level
+disable than older ones.
+
+---
+
+## Please report your results
+
+If you test `me_cleaner_experimental.py` on any of the experimental
+platforms, please **open an issue** in this repo and include:
+
+- Your machine model
+- ME version (from MEAnalyzer on the stock firmware)
+- Platform (TGL / ADL / RPL / MTL)
+- Whether HAP was set correctly in MEAnalyzer after patching
+- Whether ME was absent after flashing (`lspci`, BIOS ME field)
+
+Enough successful reports will get a platform promoted from experimental
+to the stable `me_cleaner.py`.
+
+---
+
+## Sources
+
+- XutaxKamay PR #384 on corna/me_cleaner — initial ME 15/16 research
+- Community reverse engineering via me_cleaner issues and coreboot mailing list
+- Hardware confirmation of ME 12/14 by this repo 
