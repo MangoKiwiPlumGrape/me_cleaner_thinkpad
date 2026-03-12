@@ -34,38 +34,46 @@
 #  4. ME 15 (Tiger Lake) — fpsba+0x7C (PCHSTRP31 bit 16), community confirmed.
 #     XutaxKamay's guess was correct.
 #
-#  5. ME 16 / 16.1 / 18 (Alder Lake / Raptor Lake / Meteor Lake) — HAP moved
-#     OUT of PCHSTRP entirely. Now in Flash Descriptor at offset 0x017E (set
-#     byte to 0x01 to enable HAP / disable ME). The old fpsba+0xDC guess from
-#     XutaxKamay was WRONG — corrected here based on community confirmation.
-#     ME 16, 16.1 and 18 all use the same descriptor-based HAP location.
+#  5. ME 16 / 16.1 / 18 (Alder Lake / Raptor Lake / Meteor Lake) — HAP at
+#     PCHSTRP31 bit 16, same register as Tiger Lake.
+#     Written as a byte write to Flash Descriptor offset 0x017E (= byte 2 of
+#     the PCHSTRP31 dword at fpsba+0x7C). These are NOT two different locations —
+#     they are the same bit expressed differently:
+#       fpsba=0x100 (Intel 600-series PCH Datasheet Vol1, Doc 648364, confirmed)
+#       PCHSTRP31 = fpsba + 0x7C = 0x17C  (the dword)
+#       byte 0x017E = byte 2 of that dword = bit 16 of PCHSTRP31  ✓ identical
+#     HAP never left the PCH straps. The old fpsba+0xDC (PCHSTRP55) guess from
+#     XutaxKamay was WRONG — confirmed wrong by datasheet. CSME straps at 0xC3C
+#     (new ADL section) are internal to CSME firmware and unrelated to HAP.
+#     ME 16, 16.1 and 18 all use the same HAP location.
 #
 #  6. Version → gen mapping:
 #       12 → gen 4  (8th/9th gen ThinkPad, confirmed)
 #       13 → gen 4  (Ice Lake, fpsba+0x70, community confirmed)
 #       14 → gen 5  (10th gen ThinkPad CML-LP, hardware confirmed)
 #       15 → gen 6  (Tiger Lake, fpsba+0x7C PCHSTRP31, community confirmed)
-#       16 → gen 7  (Alder Lake, descriptor offset 0x017E, community confirmed)
+#       16 → gen 7  (Alder Lake, PCHSTRP31 bit 16, Intel datasheet confirmed)
 #       16.1→ gen 7  (Raptor Lake, same as ADL)
 #       18 → gen 7  (Meteor Lake, same as ADL/RPL)
 #
-#  6. IFWI firmware (gen >= 4): module removal is skipped with a clear
+#  7. IFWI firmware (gen >= 4): module removal is skipped with a clear
 #     warning. HAP bit is still set correctly. Attempting partition
 #     cleanup on IFWI images corrupts the image.
 #
-#  7. get_hap_offset_lp_or_h() heuristic REMOVED for gen 5.
+#  8. get_hap_offset_lp_or_h() heuristic REMOVED for gen 5.
 #     Replaced with hardcoded fpsba+0x70 based on confirmed hardware data.
 #     Gen 4 retains the heuristic for ME12-H board compatibility
 #     (Z390/H370 desktop boards use fpsba+0x80).
 #
 # Confirmed hardware:
-#   8th  gen ThinkPad (ME 12, CFL-U)      — fpsba+0x70 bit 16       ✓ hw confirmed
-#   10th gen ThinkPad X13 (ME 14, CML-U)  — fpsba+0x70 bit 16       ✓ hw confirmed
-#   Ice Lake (ME 13)                       — fpsba+0x70 bit 16       ✓ community confirmed
-#   Tiger Lake (ME 15)                     — fpsba+0x7C PCHSTRP31    ✓ community confirmed
-#   Alder Lake (ME 16)                     — descriptor 0x017E=0x01  ✓ community confirmed
-#   Raptor Lake (ME 16.1)                  — descriptor 0x017E=0x01  ✓ community confirmed
-#   Meteor Lake (ME 18)                    — descriptor 0x017E=0x01  ✓ community confirmed
+#   8th  gen ThinkPad (ME 12, CFL-U)      — fpsba+0x70 PCHSTRP28 bit 16  ✓ hw confirmed
+#   10th gen ThinkPad X13 (ME 14, CML-U)  — fpsba+0x70 PCHSTRP28 bit 16  ✓ hw confirmed
+#   Ice Lake (ME 13)                       — fpsba+0x70 PCHSTRP28 bit 16  ✓ community confirmed
+#   Tiger Lake (ME 15)                     — fpsba+0x7C PCHSTRP31 bit 16  ✓ community confirmed
+#   Alder Lake (ME 16)                     — fpsba+0x7C PCHSTRP31 bit 16  ✓ Intel datasheet confirmed
+#                                            (Doc 648364, byte write to 0x017E = same bit)
+#   Raptor Lake (ME 16.1)                  — fpsba+0x7C PCHSTRP31 bit 16  ✓ community confirmed
+#   Meteor Lake (ME 18)                    — fpsba+0x7C PCHSTRP31 bit 16  ✓ community confirmed
 # ============================================================
 
 from __future__ import division, print_function
@@ -776,9 +784,11 @@ if __name__ == "__main__":
         #   ME 12        → gen 4  (8th/9th gen, hw confirmed fpsba+0x70)
         #   ME 13        → gen 4  (Ice Lake, community confirmed fpsba+0x70)
         #   ME 14        → gen 5  (Comet Lake LP, hw confirmed fpsba+0x70)
-        #   ME 15        → gen 6  (Tiger Lake, community confirmed fpsba+0x7C)
-        #   ME 16 / 16.1 → gen 7  (Alder Lake / Raptor Lake, descriptor 0x017E)
-        #   ME 18        → gen 7  (Meteor Lake, same descriptor 0x017E)
+        #   ME 15        → gen 6  (Tiger Lake, community confirmed fpsba+0x7C PCHSTRP31)
+        #   ME 16 / 16.1 → gen 7  (Alder Lake / Raptor Lake, PCHSTRP31 bit 16)
+        #                          Intel 600-series datasheet confirmed: fpsba=0x100,
+        #                          PCHSTRP31 at 0x17C, byte write to 0x017E = same bit.
+        #   ME 18        → gen 7  (Meteor Lake, same PCHSTRP31 bit 16)
         # --------------------------------------------------------
         if version[0] == 12:
             gen = 4
@@ -786,10 +796,10 @@ if __name__ == "__main__":
             gen = 4
         elif version[0] == 14:   # Comet Lake LP — HAP at fpsba+0x70 (hw confirmed)
             gen = 5
-        elif version[0] == 15:   # Tiger Lake — HAP at fpsba+0x7C PCHSTRP31
+        elif version[0] == 15:   # Tiger Lake — HAP at fpsba+0x7C PCHSTRP31 bit 16
             gen = 6
         elif version[0] in (16, 18):  # Alder Lake / Raptor Lake / Meteor Lake
-            gen = 7                   # HAP in Flash Descriptor offset 0x017E
+            gen = 7                   # HAP at PCHSTRP31 bit 16 (byte write to 0x017E)
 
         print("ME/TXE firmware version {} (generation {})"
               .format('.'.join(str(i) for i in version), gen))
@@ -871,14 +881,16 @@ if __name__ == "__main__":
                   ("SET" if pchstrp31 & 1 << 16 else "NOT SET"))
 
         elif gen == 7:
-            # ADL/RPL/MTL: HAP moved out of PCHSTRP into Flash Descriptor
-            # offset 0x017E, byte value 0x01 = HAP enabled.
-            # XutaxKamay's fpsba+0xDC guess was wrong — corrected here.
+            # ADL/RPL/MTL: HAP is PCHSTRP31 bit 16, same register as TGL (gen 6).
+            # Written as byte 0x01 to offset 0x017E in the Flash Descriptor.
+            # 0x017E = byte 2 of PCHSTRP31 dword at fpsba+0x7C = bit 16 of PCHSTRP31.
+            # Intel 600-series PCH Datasheet Vol1 (Doc 648364): fpsba=0x100 confirmed.
+            # XutaxKamay's fpsba+0xDC (PCHSTRP55) guess was wrong per datasheet.
             fdf.seek(0x17E)
             fd_hap_byte = unpack("B", fdf.read(1))[0]
             print("The HAP bit is " +
                   ("SET" if fd_hap_byte & 0x01 else "NOT SET") +
-                  " (Flash Descriptor offset 0x017E)")
+                  " (PCHSTRP31 bit 16, via descriptor byte 0x017E)")
 
         else:
             fdf.seek(fpsba)
@@ -1068,11 +1080,14 @@ if __name__ == "__main__":
 
             elif gen == 7:
                 # ADL/RPL (ME 16/16.1) / MTL (ME 18)
-                # HAP is in Flash Descriptor at offset 0x017E, not PCHSTRP.
-                # Write byte 0x01 to enable HAP. XutaxKamay's fpsba+0xDC was wrong.
-                print("Setting the HAP bit in Flash Descriptor (offset 0x017E) "
-                      "to disable Intel ME...")
-                print("  (Alder Lake / Raptor Lake / Meteor Lake — community confirmed)")
+                # HAP is PCHSTRP31 bit 16. Written as byte 0x01 to offset 0x017E.
+                # 0x017E = byte 2 of PCHSTRP31 at fpsba+0x7C. Intel 600-series
+                # PCH Datasheet Vol1 (Doc 648364) confirms fpsba=0x100, PCHSTRP31
+                # at 0x17C. XutaxKamay's fpsba+0xDC (PCHSTRP55) was wrong.
+                print("Setting the HAP bit in PCHSTRP31 bit 16 (descriptor byte "
+                      "0x017E) to disable Intel ME...")
+                print("  (Alder Lake / Raptor Lake / Meteor Lake — "
+                      "Intel datasheet confirmed, Doc 648364)")
                 fdf.write_to(0x17E, pack("B", 0x01))
 
             else:
