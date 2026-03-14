@@ -86,7 +86,7 @@ These are NOT two different locations. Old forks used `fpsba+0xDC` (PCHSTRP55) â
 | ME 18 (MTL) | missing | gen 7 placeholder with runtime warning |
 | ME 12 LP vs H | `fpsba+0x70` only | LP/H heuristic: reads both straps, picks correct one |
 | IFWI warning | silent skip | explicit warning, continues to HAP |
-| Version string | `1.2` | `1.2-thinkpad-fork` |
+| Version string | `1.2` | `1.3-thinkpad-fork` |
 
 ---
 
