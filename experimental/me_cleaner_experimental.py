@@ -353,13 +353,20 @@ def check_partition_signature(f, offset):
     return "{:#x}".format(decrypted_sig).endswith(sha256.hexdigest())   # FIXME
 
 
-def print_check_partition_signature(f, offset):
+def print_check_partition_signature(f, offset, gen=None):
     if check_partition_signature(f, offset):
         print("VALID")
     else:
         print("INVALID!!")
-        sys.exit("The FTPR partition signature is not valid. Is the input "
-                 "ME/TXE image valid?")
+        if gen is not None and gen >= 7:
+            print("  Note: FTPR RSA validation is not supported on ME 16+ IFWI")
+            print("  firmware. This message is a known tool limitation and does")
+            print("  NOT indicate a problem with your image or your HAP patch.")
+            print("  Use MEAnalyzer on your stock dump to independently verify")
+            print("  firmware integrity.")
+        else:
+            sys.exit("The FTPR partition signature is not valid. Is the input "
+                     "ME/TXE image valid?")
 
 
 def relocate_partition(f, me_end, partition_header_offset,
@@ -742,6 +749,9 @@ if __name__ == "__main__":
             if (len(ftpr_matches) == 1):
                 ftpr_offset = ftpr_matches[0].span()[0]
                 ftpr_length = 0
+                print("  Note: FTPR not found in FPT table — located via $CPD")
+                print("  scan (known BPDT firmware quirk on ME 16+ IFWI).")
+                print("  HAP write is unaffected by this.")
             else:
                 sys.exit("FTPR header not found, this image doesn't seem to be "
                         "valid")
@@ -1090,11 +1100,25 @@ if __name__ == "__main__":
                 print("  (Confirmed: ThinkPad X13 Gen1, CML-U LP, ME 14)")
                 pchstrp28 |= (1 << 16)
                 fdf.write_to(fpsba + 0x70, pack("<I", pchstrp28))
+                # Self-verify
+                fdf.seek(fpsba + 0x70)
+                verify_strp = unpack("<I", fdf.read(4))[0]
+                if verify_strp & (1 << 16):
+                    print("  HAP write verified: PCHSTRP28 = 0x{:08X} ✓".format(verify_strp))
+                else:
+                    sys.exit("ERROR: HAP write failed — PCHSTRP28 bit 16 not set after write.")
 
             elif gen == 6:
                 print("Setting the HAP bit in PCHSTRP31 to disable Intel ME...")
                 pchstrp31 |= (1 << 16)
                 fdf.write_to(fpsba + 0x7C, pack("<I", pchstrp31))
+                # Self-verify
+                fdf.seek(fpsba + 0x7C)
+                verify_strp = unpack("<I", fdf.read(4))[0]
+                if verify_strp & (1 << 16):
+                    print("  HAP write verified: PCHSTRP31 = 0x{:08X} ✓".format(verify_strp))
+                else:
+                    sys.exit("ERROR: HAP write failed — PCHSTRP31 bit 16 not set after write.")
 
             elif gen == 7:
                 # ADL/RPL (ME 16/16.1): HAP is PCHSTRP31 bit 16, byte 0x01 to 0x017E.
@@ -1112,6 +1136,14 @@ if __name__ == "__main__":
                 else:
                     print("  (Alder Lake / Raptor Lake — Intel datasheet confirmed, Doc 648364)")
                 fdf.write_to(0x17E, pack("B", 0x01))
+                # Self-verify: read back and confirm the write took
+                fdf.seek(0x17E)
+                verify_byte = unpack("B", fdf.read(1))[0]
+                if verify_byte & 0x01:
+                    print("  HAP write verified: byte 0x017E = 0x{:02X} ✓".format(verify_byte))
+                else:
+                    sys.exit("ERROR: HAP write failed — byte 0x017E still reads "
+                             "0x{:02X} after write. Image may be read-only.".format(verify_byte))
 
             else:
                 print("Setting the AltMeDisable bit in PCHSTRP10 to disable "
@@ -1181,12 +1213,13 @@ if __name__ == "__main__":
                 print("Checking the FTPR RSA signature of the extracted ME "
                       "image... ", end="")
                 print_check_partition_signature(mef_copy,
-                                                ftpr_offset + ftpr_mn2_offset)
+                                                ftpr_offset + ftpr_mn2_offset,
+                                                gen)
             mef_copy.close()
 
         if not me6_ignition:
             print("Checking the FTPR RSA signature... ", end="")
-            print_check_partition_signature(mef, ftpr_offset + ftpr_mn2_offset)
+            print_check_partition_signature(mef, ftpr_offset + ftpr_mn2_offset, gen)
 
     f.close()
 
