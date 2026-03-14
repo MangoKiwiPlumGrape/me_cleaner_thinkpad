@@ -1,9 +1,10 @@
-# Experimental Platform Support 
+# Experimental Platform Support
 
 This folder contains extended platform support that goes beyond the
 hardware-confirmed fixes in the main `me_cleaner.py`. The changes here
-are based on community reverse engineering and consensus — not direct
-hardware flashing by this repo's maintainer.
+are based on community reverse engineering, Intel PCH datasheet analysis,
+and consensus — not direct hardware flashing by this repo's maintainer
+(except where noted).
 
 **Use at your own risk. Always make a full backup of your firmware before
 flashing. An incorrect HAP patch that silently writes to the wrong location
@@ -19,67 +20,106 @@ Intel platforms on top of the stable hardware-confirmed fork.
 ### What's in the stable fork (unchanged here)
 
 | ME Version | Platform | HAP Location | Status |
-|-----------|----------|-------------|--------|
-| ME 12 LP | Cannon Lake / Whiskey Lake (8th/9th gen) | `fpsba+0x70` PCHSTRP28 bit 16 | ✅ Hardware confirmed |
-| ME 12 H | Cannon Lake H / Z390 desktop | `fpsba+0x80` PCHSTRP32 bit 16 | ✅ Hardware confirmed |
-| ME 13 | Ice Lake (10th gen LP) | `fpsba+0x70` PCHSTRP28 bit 16 | ✅ Community confirmed |
-| ME 14 | Comet Lake LP (10th gen) | `fpsba+0x70` PCHSTRP28 bit 16 | ✅ Hardware confirmed |
+|---|---|---|---|
+| ME 12 LP | Cannon Lake / Whiskey Lake (8th/9th gen U) | `fpsba+0x70` PCHSTRP28 bit 16 | ✅ Hardware confirmed |
+| ME 12 H | Cannon Lake H / Z390 desktop | `fpsba+0x80` PCHSTRP32 bit 16 | ✅ Hardware confirmed via PR#282 |
+| ME 13 | Ice Lake (10th gen LP) | `fpsba+0x70` PCHSTRP28 bit 16 | ✅ Datasheet confirmed (Doc 615170) |
+| ME 14 | Comet Lake LP (10th gen) | `fpsba+0x70` PCHSTRP28 bit 16 | ✅ Hardware confirmed (X13 Gen1) |
 
-### What's new and experimental
+### What's new in experimental
 
 | ME Version | Platform | HAP Location | Status |
-|-----------|----------|-------------|--------|
+|---|---|---|---|
 | ME 15 | Tiger Lake (11th gen) | `fpsba+0x7C` PCHSTRP31 bit 16 | ⚠️ Community confirmed, not hw tested here |
-| ME 16 | Alder Lake (12th gen) | Flash Descriptor offset `0x017E` byte `0x01` | ⚠️ Community confirmed, not hw tested here |
-| ME 16.1 | Raptor Lake (13th gen) | Flash Descriptor offset `0x017E` byte `0x01` | ⚠️ Community confirmed, not hw tested here |
-| ME 18 | Meteor Lake (Core Ultra) | Flash Descriptor offset `0x017E` byte `0x01` | ⚠️ Community confirmed, not hw tested here |
+| ME 16 | Alder Lake (12th gen) | `fpsba+0x7C` PCHSTRP31 bit 16 = byte `0x017E` | ✅ Datasheet confirmed (Doc 648364) |
+| ME 16.1 | Raptor Lake (13th gen) | `fpsba+0x7C` PCHSTRP31 bit 16 = byte `0x017E` | ✅ Datasheet confirmed (Doc 743835) |
+| ME 18 | Meteor Lake (14th gen) | **UNKNOWN** — current write is a placeholder | ❌ Unconfirmed — do not rely on |
 
-### Key change for ADL/RPL/MTL (ME 16+)
+---
 
-On Alder Lake and newer, Intel moved the HAP bit **out of PCHSTRP
-entirely**. It is no longer a strap bit — it is a byte in the Flash
-Descriptor itself at offset `0x017E`. Setting this byte to `0x01` enables
-HAP and disables ME.
+## ADL/RPL HAP Location — Correction vs Other Forks
 
-Previous community guesses (including `fpsba+0xDC` from XutaxKamay's
-PR #384) were incorrect. The descriptor-based location has since been
-confirmed by multiple community members independently.
+The HAP bit on Alder Lake and Raptor Lake **did not move out of the PCH
+Straps**. It is still PCHSTRP31 bit 16 — the same register as Tiger Lake.
+
+Writing to byte `0x017E` and writing to `fpsba+0x7C` bit 16 are
+**identical operations**:
+
+```
+fpsba         = 0x100        (confirmed, Intel 600/700-series PCH datasheets)
+PCHSTRP31     = fpsba + 0x7C = 0x17C   (the 32-bit strap dword)
+byte 0x017E   = 0x17C + 2    = byte 2 of that dword = bits 16–23
+bit 16        = bit 0 of byte 0x017E
+```
+
+Some community forks (including XutaxKamay PR #384) originally guessed
+`fpsba+0xDC` (PCHSTRP55). That is wrong — confirmed by direct analysis
+of Intel 600-series PCH Datasheet Vol1 (Doc 648364) and 700-series
+(Doc 743835).
+
+---
+
+## MTL Warning
+
+Meteor Lake (ME 18) has a completely different descriptor layout. There
+are **no PCH Straps at `0x100`** on MTL. The HAP bit likely lives in
+IOE Soft Straps at `0xCAC`, but this has not been empirically confirmed.
+
+The current code writes to `0x017E` when ME 18 is detected and prints
+a runtime warning. This write is almost certainly wrong on MTL and may
+have no effect. A new gen 8 path will be added once the HAP offset is
+confirmed from a real MTL firmware dump.
+
+**Do not flash an MTL image based on this tool without first confirming
+the HAP offset.**
+
+---
+
+## Internal Generation Map
+
+The script maps ME version numbers to internal "generation" codes:
+
+| ME Version | Platform | Internal gen | HAP write |
+|---|---|---|---|
+| 12 | Cannon/Whiskey Lake | gen 4 | `fpsba+0x70` or `+0x80` (LP/H heuristic) |
+| 13 | Ice Lake | gen 4 | `fpsba+0x70` PCHSTRP28 |
+| 14 | Comet Lake LP | gen 5 | `fpsba+0x70` PCHSTRP28 (hardcoded, hw confirmed) |
+| 15 | Tiger Lake | gen 6 | `fpsba+0x7C` PCHSTRP31 |
+| 16 / 16.1 | Alder / Raptor Lake | gen 7 | byte write to `0x017E` = PCHSTRP31 bit 16 |
+| 18 | Meteor Lake | gen 7 ⚠️ | byte write to `0x017E` — **PLACEHOLDER, likely wrong** |
 
 ---
 
 ## Usage
 
-Identical to the original me_cleaner — it is a single Python file with no
-extra dependencies:
+Identical to the original me_cleaner:
 
 ```bash
-# Set HAP only (recommended for IFWI firmware — newer platforms)
+# Set HAP bit only (recommended for all IFWI firmware — ME 12+)
 python3 me_cleaner_experimental.py -s firmware.bin -O firmware_hap.bin
 
-# Set HAP and strip modules (older platforms only — not for IFWI)
-python3 me_cleaner_experimental.py -S firmware.bin -O firmware_hap.bin
-
 # Check status only — does not modify anything
-python3 me_cleaner_experimental.py --check firmware.bin
+python3 me_cleaner_experimental.py -c firmware.bin
+
+# Set HAP and strip modules (older pre-IFWI platforms only)
+python3 me_cleaner_experimental.py -S firmware.bin -O firmware_hap.bin
 ```
 
-> **Note:** On gen 4+ (ME 12 and newer) the tool automatically detects
-> IFWI firmware format and skips module stripping with a warning, only
-> setting the HAP bit. This is the correct and safe behaviour for modern
-> ThinkPads and other IFWI-based platforms.
+> On gen 4+ (ME 12 and newer) the tool automatically detects IFWI firmware
+> and skips module stripping with a warning, only setting the HAP bit.
+> This is the correct and safe behaviour for all modern platforms.
 
 ---
 
-## How to verify it worked (without flashing)
+## Verifying Before You Flash
 
-After running the tool, check with MEAnalyzer before you flash anything:
+After patching, always check with MEAnalyzer before flashing:
 
-```
-MEAnalyzer.py firmware_hap.bin
+```bash
+python3 MEAnalyzer.py firmware_hap.bin
 ```
 
 Look for:
-
 ```
 HAP/AltMeDisable: Yes
 ```
@@ -88,46 +128,45 @@ If it says `No` — the patch did not apply correctly. Do not flash.
 
 ---
 
-## After flashing — how to confirm ME is disabled
+## After Flashing — Confirming ME Is Disabled
 
 ```bash
-# Should return nothing on a fully disabled machine
+# Should return nothing
 lspci | grep -i mei
 
-# Will report "ME not present" or exit immediately if MEI is gone
+# Should report no device
 sudo ./intelmetool -m
 ```
 
-On 8th gen+ ThinkPads with HAP correctly set:
+On a correctly patched machine:
 - `lspci` returns nothing for MEI
 - BIOS ME version field is blank
-- intelmetool cannot find a device to talk to
+- intelmetool cannot find a device
 
-This is the expected and correct result. See
-[ME_Disable_Comparison.md](../ME_Disable_Comparison.md) for a detailed
-explanation of why newer platforms show a more complete hardware-level
-disable than older ones.
+See [ME_Disable_Comparison.md](../ME_Disable_Comparison.md) for a full
+breakdown of what to expect per platform.
 
 ---
 
-## Please report your results
+## Please Report Your Results
 
-If you test `me_cleaner_experimental.py` on any of the experimental
-platforms, please **open an issue** in this repo and include:
+If you test on any experimental platform, open an issue and include:
 
-- Your machine model
-- ME version (from MEAnalyzer on the stock firmware)
+- Machine model
+- ME version (from MEAnalyzer on stock firmware)
 - Platform (TGL / ADL / RPL / MTL)
-- Whether HAP was set correctly in MEAnalyzer after patching
+- Whether MEAnalyzer shows `HAP/AltMeDisable: Yes` after patching
 - Whether ME was absent after flashing (`lspci`, BIOS ME field)
 
-Enough successful reports will get a platform promoted from experimental
-to the stable `me_cleaner.py`.
+Enough confirmed reports will promote a platform to the stable `me_cleaner.py`.
 
 ---
 
 ## Sources
 
 - XutaxKamay PR #384 on corna/me_cleaner — initial ME 15/16 research
+- Intel 600-series PCH Datasheet Vol1, Doc 648364 — ADL HAP location confirmed
+- Intel 700-series PCH Datasheet Vol1, Doc 743835 — RPL HAP location confirmed
+- Intel 400-series PCH Datasheet (ICL On-Package), Doc 615170 — ICL HAP confirmed
 - Community reverse engineering via me_cleaner issues and coreboot mailing list
-- Hardware confirmation of ME 12/14 by this repo 
+- Hardware confirmation of ME 12/14 by this repo
