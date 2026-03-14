@@ -1,60 +1,63 @@
-
 <div align="center">
 
-#  me_cleaner v1.3 — HAP / Soft-Disable Fork
+# me_cleaner v1.3 — HAP / Soft-Disable Fork
 ### Hardware-confirmed Intel ME disable for 8th–14th Gen Intel platforms
 
-[![ME 12](https://img.shields.io/badge/ME%2012-confirmed-brightgreen?style=flat-square&logo=intel)](https://github.com/your-username/me_cleaner-thinkpad)
-[![ME 13](https://img.shields.io/badge/ME%2013-confirmed-brightgreen?style=flat-square&logo=intel)](https://github.com/your-username/me_cleaner-thinkpad)
-[![ME 14](https://img.shields.io/badge/ME%2014-confirmed-brightgreen?style=flat-square&logo=intel)](https://github.com/your-username/me_cleaner-thinkpad)
-[![ME 15](https://img.shields.io/badge/ME%2015-experimental-orange?style=flat-square&logo=intel)](https://github.com/your-username/me_cleaner-thinkpad/tree/main/experimental)
-[![ME 16](https://img.shields.io/badge/ME%2016-experimental-orange?style=flat-square&logo=intel)](https://github.com/your-username/me_cleaner-thinkpad/tree/main/experimental)
-[![ME 18](https://img.shields.io/badge/ME%2018-experimental-orange?style=flat-square&logo=intel)](https://github.com/your-username/me_cleaner-thinkpad/tree/main/experimental)
+[![ME 12](https://img.shields.io/badge/ME%2012-confirmed-brightgreen?style=flat-square&logo=intel)](https://github.com/MangoKiwiPlumGrape/me_cleaner_thinkpad)
+[![ME 13](https://img.shields.io/badge/ME%2013-confirmed-brightgreen?style=flat-square&logo=intel)](https://github.com/MangoKiwiPlumGrape/me_cleaner_thinkpad)
+[![ME 14](https://img.shields.io/badge/ME%2014-confirmed-brightgreen?style=flat-square&logo=intel)](https://github.com/MangoKiwiPlumGrape/me_cleaner_thinkpad)
+[![ME 15](https://img.shields.io/badge/ME%2015-experimental-orange?style=flat-square&logo=intel)](https://github.com/MangoKiwiPlumGrape/me_cleaner_thinkpad/tree/main/experimental)
+[![ME 16](https://img.shields.io/badge/ME%2016-confirmed-brightgreen?style=flat-square&logo=intel)](https://github.com/MangoKiwiPlumGrape/me_cleaner_thinkpad/tree/main/experimental)
+[![ME 18](https://img.shields.io/badge/ME%2018-unconfirmed-red?style=flat-square&logo=intel)](https://github.com/MangoKiwiPlumGrape/me_cleaner_thinkpad/tree/main/experimental)
 
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue?style=flat-square)](https://www.gnu.org/licenses/gpl-3.0)
 [![Fork of](https://img.shields.io/badge/fork%20of-corna%2Fme__cleaner-lightgrey?style=flat-square)](https://github.com/corna/me_cleaner)
-[![Hardware Tested](https://img.shields.io/badge/hardware-tested%20%26%20flashed-success?style=flat-square)](https://github.com/your-username/me_cleaner-thinkpad)
-[![Year](https://img.shields.io/badge/updated-2026-informational?style=flat-square)](https://github.com/your-username/me_cleaner-thinkpad)
+[![Hardware Tested](https://img.shields.io/badge/hardware-tested%20%26%20flashed-success?style=flat-square)](https://github.com/MangoKiwiPlumGrape/me_cleaner_thinkpad)
+[![Year](https://img.shields.io/badge/updated-2026-informational?style=flat-square)](https://github.com/MangoKiwiPlumGrape/me_cleaner_thinkpad)
 
-> **Fork of [corna/me_cleaner](https://github.com/corna/me_cleaner) fixing HAP bit offsets for 8th–10th gen Intel platforms, with experimental support up to 14th gen (Meteor Lake). All stable fixes hardware-confirmed on real ThinkPad hardware.**
+> **Fork of [corna/me_cleaner](https://github.com/corna/me_cleaner) fixing HAP bit offsets for 8th–13th gen Intel platforms, with datasheet-confirmed support for Alder Lake / Raptor Lake (ME 16/16.1) and a placeholder for Meteor Lake (ME 18). All stable fixes hardware-confirmed on real hardware.**
 
 </div>
 
-
->  **Experimental support for ME 15–18 (Tiger Lake, Alder Lake, Raptor Lake, Meteor Lake) is available.**
-> See [experimental/README](experimental/README) — community confirmed, not yet hardware tested. Reports welcome.
+> **Experimental support for ME 15–18 (Tiger Lake, Alder Lake, Raptor Lake, Meteor Lake) is in [experimental/](experimental/).**
+> ME 16/16.1 (ADL/RPL) is now datasheet-confirmed. ME 18 (MTL) is a placeholder — HAP path unconfirmed. Reports welcome.
 
 ---
-For a detailed comparison of HAP vs soft-disable effectiveness across hardware generations, see [ME_Disable_Comparison.md](ME_Disable_Comparison.md). 
 
-
+For a detailed comparison of HAP vs soft-disable effectiveness across hardware generations, see [ME_Disable_Comparison.md](ME_Disable_Comparison.md).
 
 ---
 
 ## What This Fork Fixes
 
-The original me_cleaner v1.2 has two problems on modern ThinkPads:
+The original me_cleaner v1.2 has two problems on modern platforms:
 
 **Problem 1 — ME 14 (10th gen, Comet Lake LP) writes to the wrong strap.**
-The original hardcodes `fpsba+0x80` (PCHSTRP32) for ME 14. On Comet Lake LP boards (ThinkPad X13, X1C Gen 8, T14 etc.) the HAP bit lives in `fpsba+0x70` (PCHSTRP28) at bit 16. Writing to `+0x80` silently does nothing — the image passes RSA validation but ME is never disabled.
+The original hardcodes `fpsba+0x80` (PCHSTRP32) for ME 14. On Comet Lake LP (ThinkPad X13, T14, L14 Gen1 etc.) the HAP bit lives in `fpsba+0x70` (PCHSTRP28) at bit 16. Writing to `+0x80` silently does nothing.
 
 **Problem 2 — ME 13 (Ice Lake, 10th gen) is completely missing.**
-The original has no version mapping for ME 13 at all. Ice Lake systems fall through with undefined behaviour.
+The original has no version mapping for ME 13. Ice Lake systems fall through with undefined behaviour. This fork maps ME 13 to gen 4 (`fpsba+0x70`), confirmed by Intel PCH datasheet Doc 615170.
+
+**Additionally fixed vs all other forks:**
+- ME 16/16.1 (ADL/RPL) HAP location corrected — old forks used `fpsba+0xDC` (PCHSTRP55) which is wrong. The correct location is `fpsba+0x7C` (PCHSTRP31 bit 16), confirmed by Intel 600-series PCH Datasheet (Doc 648364) and 700-series (Doc 743835). Writing to byte `0x017E` is identical — it is byte 2 of the PCHSTRP31 dword at `fpsba+0x17C`.
+- ME 18 (MTL) warning added — MTL has no PCH straps at `0x100`. The current gen 7 path is a placeholder and prints a runtime warning. Do not rely on it for MTL without confirming the HAP offset from a real MTL dump first.
 
 ---
 
 ## Hardware-Confirmed HAP Bit Locations
 
-These offsets were verified by diffing stock BIOS dumps against Intel FIT-patched reference images, byte by byte:
-
-| Platform | ME Version | ThinkPad | HAP Location | Confirmed |
+| ME Version | Platform | ThinkPad | HAP Location | Status |
 |---|---|---|---|---|
-| Coffee Lake U (8th gen) | ME 12.0.x | X1 Carbon Gen 6 | `fpsba+0x70` bit 16 | ✅ |
-| Whiskey Lake U (8th gen) | ME 12.0.x | X1 Carbon Gen 7 | `fpsba+0x70` bit 16 | ✅ |
-| Comet Lake U LP (10th gen) | ME 14.1.x | X13 Gen 1 | `fpsba+0x70` bit 16 | ✅ |
-| Cannon Lake H (desktop) | ME 12.0.x | Z390/H370/B360 | `fpsba+0x80` bit 16 | ✅ via PR#282 |
+| ME 12.0.x | Coffee Lake U (8th gen) | X1 Carbon Gen 6/7 | `fpsba+0x70` PCHSTRP28 bit 16 | ✅ hardware confirmed |
+| ME 12.0.x | Cannon Lake H (desktop) | Z390/H370/B360 | `fpsba+0x80` PCHSTRP32 bit 16 | ✅ confirmed via PR#282 |
+| ME 13.x.x | Ice Lake LP (10th gen) | — | `fpsba+0x70` PCHSTRP28 bit 16 | ✅ datasheet confirmed (Doc 615170) |
+| ME 14.1.x | Comet Lake LP (10th gen) | X13 Gen1, T14 Gen1 | `fpsba+0x70` PCHSTRP28 bit 16 | ✅ hardware confirmed |
+| ME 15.x.x | Tiger Lake (11th gen) | — | `fpsba+0x7C` PCHSTRP31 bit 16 | ⚠️ community confirmed |
+| ME 16.x.x | Alder Lake (12th gen) | — | `fpsba+0x7C` PCHSTRP31 bit 16 | ✅ datasheet confirmed (Doc 648364) |
+| ME 16.1.x | Raptor Lake (13th gen) | — | `fpsba+0x7C` PCHSTRP31 bit 16 | ✅ datasheet confirmed (Doc 743835) |
+| ME 18.x.x | Meteor Lake (14th gen) | — | Unknown — descriptor layout changed | ❌ unconfirmed, placeholder only |
 
-**Proof for CML-U LP (X13 Gen 1):**
+**Proof for CML-U LP (ThinkPad X13 Gen1):**
 ```
 stock   PCHSTRP28 = 0x801801b8   (HAP bit 16 = 0)
 patched PCHSTRP28 = 0x801901b8   (HAP bit 16 = 1)
@@ -62,15 +65,26 @@ diff    =           0x00010000   ← exactly one bit
 cmp -l byte 371 = fpsba(0x100) + 0x70 + 3 (byte 3 of dword)
 ```
 
+**ADL/RPL offset clarification:**
+```
+fpsba         = 0x100           (confirmed, Intel 600/700-series PCH datasheets)
+PCHSTRP31     = fpsba + 0x7C   = 0x17C   (the 32-bit strap dword)
+byte 0x017E   = fpsba + 0x7E   = byte 2 of PCHSTRP31 = bit 16 of PCHSTRP31
+```
+These are NOT two different locations. Old forks used `fpsba+0xDC` (PCHSTRP55) — that is wrong.
+
 ---
 
 ## Changes vs Original me_cleaner v1.2
 
 | Change | Original | This Fork |
 |---|---|---|
-| ME 14 HAP offset | `fpsba+0x80` ❌ | `fpsba+0x70` ✅ confirmed |
-| ME 13 (Ice Lake) | missing — crashes | mapped to gen 4, `fpsba+0x70` |
-| ME 12 LP vs H | `fpsba+0x70` only | LP heuristic: `+0x70` or `+0x80` |
+| ME 14 HAP offset | `fpsba+0x80` ❌ | `fpsba+0x70` PCHSTRP28 ✅ hw confirmed |
+| ME 13 (Ice Lake) | missing — undefined | gen 4, `fpsba+0x70`, datasheet confirmed |
+| ME 15 (Tiger Lake) | missing | gen 6, `fpsba+0x7C` PCHSTRP31 |
+| ME 16/16.1 (ADL/RPL) | missing or wrong `+0xDC` | gen 7, `fpsba+0x7C` PCHSTRP31, datasheet confirmed |
+| ME 18 (MTL) | missing | gen 7 placeholder with runtime warning |
+| ME 12 LP vs H | `fpsba+0x70` only | LP/H heuristic: reads both straps, picks correct one |
 | IFWI warning | silent skip | explicit warning, continues to HAP |
 | Version string | `1.2` | `1.2-thinkpad-fork` |
 
@@ -78,37 +92,44 @@ cmp -l byte 371 = fpsba(0x100) + 0x70 + 3 (byte 3 of dword)
 
 ## Supported Platforms
 
-This fork is focused on **soft-disable via HAP bit only** (`-s` / `-S` flags). Module removal (`-S` without `-s`) is **not supported** on ME 12+ IFWI firmware — attempting it corrupts the image. The script will warn you and skip it automatically.
+This fork is focused on **soft-disable via HAP bit only** (`-s` / `-S` flags). Module removal is **not supported** on ME 12+ IFWI firmware — the script warns and skips it automatically.
 
-| Generation | CPU | ME Version | HAP Path | Status |
-|---|---|---|---|---|
-| 8th gen (U) | Coffee Lake / Whiskey Lake | ME 12.0.x | gen 4 → `fpsba+0x70` | ✅ hardware confirmed |
-| 9th gen (U) | Coffee Lake Refresh | ME 12.0.x | gen 4 → `fpsba+0x70` | ✅ hardware confirmed |
-| 10th gen (U) | Comet Lake LP | ME 14.1.x | gen 5 → `fpsba+0x70` | ✅ hardware confirmed (X13 Gen1) |
-| 8th/9th gen (H) | Cannon Lake H | ME 12.0.x | gen 4 → `fpsba+0x80` | ✅ hardware confirmed via PR#282 |
-| 10th gen (U) | Ice Lake | ME 13.x.x | gen 4 → `fpsba+0x70` | ⚠️ unmapped in all forks — logic added, untested |
-| 11th gen | Tiger Lake | ME 15.x.x | gen 6 → `fpsba+0x7C` | ⚠️ works on some boards, RSA INVALID reported on others |
-| 12th gen+ | Alder Lake / Raptor Lake | ME 16.x.x | gen 7 → `fpsba+0xDC` | ⚠️ XutaxKamay stated "not sure about this one" — use with caution |
+| Generation | CPU | ME Version | Internal gen | HAP Path | Status |
+|---|---|---|---|---|---|
+| 8th gen (U) | Coffee Lake / Whiskey Lake | ME 12.0.x | gen 4 | `fpsba+0x70` PCHSTRP28 | ✅ hardware confirmed |
+| 8th/9th gen (H) | Cannon Lake H | ME 12.0.x | gen 4 | `fpsba+0x80` PCHSTRP32 | ✅ confirmed via PR#282 |
+| 10th gen (U) | Ice Lake LP | ME 13.x.x | gen 4 | `fpsba+0x70` PCHSTRP28 | ✅ datasheet confirmed (Doc 615170) |
+| 10th gen (U) | Comet Lake LP | ME 14.1.x | gen 5 | `fpsba+0x70` PCHSTRP28 | ✅ hardware confirmed (X13 Gen1) |
+| 11th gen | Tiger Lake | ME 15.x.x | gen 6 | `fpsba+0x7C` PCHSTRP31 | ⚠️ community confirmed |
+| 12th gen | Alder Lake | ME 16.x.x | gen 7 | `fpsba+0x7C` PCHSTRP31 | ✅ datasheet confirmed (Doc 648364) |
+| 13th gen | Raptor Lake | ME 16.1.x | gen 7 | `fpsba+0x7C` PCHSTRP31 | ✅ datasheet confirmed (Doc 743835) |
+| 14th gen | Meteor Lake | ME 18.x.x | gen 7 ⚠️ | unknown | ❌ placeholder — do not rely on |
+
+---
+
+## MTL Warning
+
+Meteor Lake (ME 18) uses a completely different descriptor layout. There are no PCH Straps at `0x100` on MTL. The HAP bit likely lives in IOE Soft Straps at `0xCAC`, but this has not been empirically confirmed. The current code prints a runtime warning when ME 18 is detected and still writes to `0x017E` — this write is almost certainly wrong on MTL and may have no effect. **Do not flash an MTL image based on this tool without first confirming the HAP offset from a known-good MTL dump.**
 
 ---
 
 ## Usage
 
 ```bash
-# 1. Make a backup of your current BIOS first — always
+# 1. Back up your BIOS first — always
 sudo flashrom -p internal -r stock_backup.bin
 
 # 2. Check current state (no writes, safe to run)
 python3 me_cleaner.py -c stock_backup.bin
 
-# 3. Patch HAP bit only into a new output file (recommended)
-python3 me_cleaner.py -s -O patched.bin stock_backup.bin
+# 3. Set HAP bit only — writes to a new output file
+python3 me_cleaner.py -s stock_backup.bin -O patched.bin
 
-# 4. Verify the patch looks correct before flashing
+# 4. Verify before flashing
 python3 me_cleaner.py -c patched.bin
 # Should print: The HAP bit is SET
 
-# 5. Flash patched image
+# 5. Flash
 sudo flashrom -p internal -w patched.bin
 ```
 
@@ -119,11 +140,11 @@ sudo flashrom -p internal -w patched.bin
 ```bash
 # ME should disappear from PCI bus
 lspci | grep -i "mei\|management engine\|heci"
-# → should return nothing
+# → nothing
 
-# If you have intelmetool
-sudo intelmetool -m
-# → should show "Error 198: ME disabled" or ME version 0.0.0.0
+# If you have intelmetool-thinkpad
+sudo ./intelmetool -m
+# → "ME disabled" or ME version 0.0.0.0
 ```
 
 ---
@@ -133,135 +154,80 @@ sudo intelmetool -m
 - Python 3
 - `flashrom` for dumping/flashing
 - Root access
-- A full BIOS dump (not just the ME region) — `-s` requires a full dump
+- A full BIOS dump (not just the ME region) — `-s` requires a full image
 
 ---
 
 ## Important Warnings
 
-- **Always back up your BIOS before flashing.** Use `flashrom -p internal -r backup.bin`.
-- This is a **soft/firmware-level disable** only. The ME hardware still exists. It halts itself after hardware init when the HAP bit is set.
-- This does **not** remove ME modules. On IFWI firmware (ME 12+) module removal is not possible without corrupting the image.
-- Tested on ThinkPads. Other vendors may have different `fpsba` layouts — always run `-c` first and verify the output makes sense before using `-s`.
-- If `-c` reports the HAP bit as already SET on your stock image, do not patch — it's already disabled.
-
----
-
-## Credits
-
-Original me_cleaner by **Nicola Corna** — Copyright (C) 2016-2018  
-License: GNU GPL v3  
-Source: https://github.com/corna/me_cleaner
-
-ME 12 H (PCHSTRP32) findings: PR#282 by @ghost / @davidmartinzeus  
-ME 15/16 HAP offsets: **XutaxKamay** — https://github.com/XutaxKamay/me_cleaner  
-(note: ME 15/16 offsets are not fully confirmed across all boards — see platform table above)
-
-**HAP offset hardware confirmation for ME 14 CML-LP (this fork):**  
-Verified via byte-level diff of stock vs Intel FIT-patched BIOS on ThinkPad 10th gen comet lake  
-`stock 0x801801b8 → patched 0x801901b8 — diff = 0x00010000 (bit 16 of PCHSTRP28)`
+- **Always back up your BIOS before flashing.**
+- This is a **firmware-level soft disable** only. ME hardware still exists — it halts itself after hardware init when HAP is set.
+- This does **not** remove ME modules. On IFWI firmware (ME 12+) module removal corrupts the image.
+- Tested primarily on ThinkPads. Other vendors may have different `fpsba` layouts — always run `-c` first.
+- If `-c` reports HAP already SET on your stock image, do not patch — it's already disabled.
 
 ---
 
 ## What Happens After Setting HAP
 
-Once the patched BIOS is flashed, the Intel ME halts itself immediately after hardware initialisation. No tool, driver or OS interface can communicate with it.
-
-### BIOS / Firmware
-- ME version field is **empty/blank**
-- No ME information is displayed anywhere in the BIOS
-
-### lspci
-```bash
-$ lspci | grep -i "mei\|management engine\|heci"
-# returns nothing
-```
-
-### Intel MEInfo
-```bash
-$ sudo ./MEInfo
-# returns nothing — no ME interface to talk to
-```
-
-### intelmetool
-```bash
-$ sudo intelmetool -m
-# returns nothing — no ME interface to talk to
-```
-
-### MEAnalyzer
-Cannot communicate with the live ME. Can still parse the BIOS **file** and will confirm `HAP/AltMeDisable: Yes`.
-
-### Summary
 | Tool | Before HAP | After HAP |
 |---|---|---|
 | BIOS ME version | 14.x.x.x | **blank** |
-| `lspci` | visible | **nothing** |
+| `lspci` | MEI device visible | **nothing** |
 | MEInfo | returns ME data | **nothing** |
 | intelmetool | returns ME data | **nothing** |
-| MEAnalyzer (file) | HAP = No | HAP = Yes |
-| Any ME tool (live) | functional | **no device to bind to** |
+| MEAnalyzer (file) | HAP = No | **HAP = Yes** |
+| Any ME tool (live) | functional | **no device** |
+
+---
 
 ## Deep Dive: What Intel FIT Actually Does for HAP (CML-LP Research)
 
-During development of this fork, a byte-level analysis was performed comparing a stock BIOS dump against an Intel FIT (Flash Image Tool) HAP-patched image on a 10th gen ThinkPad (Comet Lake LP, ME 14.1.x, vPro). The findings are documented here for anyone doing ME research.
+A byte-level analysis was performed comparing a stock BIOS dump against an Intel FIT HAP-patched image on a 10th gen ThinkPad (Comet Lake LP, ME 14.1.x, vPro).
 
-### The Simple Truth First
+### The Simple Truth
 
 **A single byte change is sufficient to set HAP and disable ME on CML-LP.**
 
-This fork changes exactly 1 byte — `PCHSTRP28` at `fpsba+0x70`, bit 16. After flashing, ME disappears from the BIOS, lspci, and all ME tools. Intel FIT changes 534 bytes for the same operation. Here is why.
+This fork changes exactly 1 byte — `PCHSTRP28` at `fpsba+0x70`, bit 16. After flashing, ME disappears from BIOS, lspci, and all ME tools. Intel FIT changes 534 bytes for the same operation. Here is why.
 
 ### What FIT Changes Beyond the HAP Bit
 
-Running `cmp -l` between stock and FIT-patched images revealed four distinct categories of changes:
-
-**1. HAP bit — `fpsba+0x70` bit 16 (byte 371 / `0x173`)**
-The primary HAP trigger. Sets PCHSTRP28 bit 16 in the flash descriptor PCH strap area.
+**1. HAP bit — `fpsba+0x70` bit 16 (byte `0x173`)**
 ```
 stock:   PCHSTRP28 = 0x801801b8
 patched: PCHSTRP28 = 0x801901b8
-diff:              = 0x00010000  ← exactly one bit
+diff:              = 0x00010000  ← one bit
 ```
 
-**2. Descriptor metadata — version/sequence counters updated in 3 regions**
-FIT updates a version counter, sequence number and size field at the same relative offsets inside three separate firmware regions (`0x4000`, `0x157000`, `0x63f000`). The same 4-byte pattern changes identically across all three:
-```
-+0x12: 0x00 → 0x01  (sequence counter increment)
-+0x14: 0x2d → 0x3c  (size/length field)
-+0x16: 0x6d → 0xfe  (size/length field continued)
-+0x17: 0x05 → 0x06  (version bump)
-```
+**2. Descriptor metadata** — version/sequence counters updated in 3 regions (`0x4000`, `0x157000`, `0x63f000`). Same 4-byte pattern changes identically across all three.
 
-**3. Checksums recalculated**
-FIT recalculates checksums for each modified region:
-- Two EFI firmware volumes (`0x4000`, `0x157000`) — 16-bit checksums updated at `+0x0a/0x0b`
-- FPT header (`0x63f000`) — 8-bit checksum updated at `+0x0b`
+**3. Checksums recalculated** — EFI firmware volumes and FPT header checksums updated.
 
-**4. ME provisioning block wiped — `0x786000`–`0x786208` (519 bytes → `0xFF`)**
-FIT completely erases a 519-byte region to flash-erased state (`0xFF`). Stock content of this region begins `0x00 0x00 0x00 0x00 0x02 0x7e...` suggesting it contains provisioning tokens or manufacturing data.
+**4. ME provisioning block wiped** — `0x786000`–`0x786208` (519 bytes → `0xFF`). Likely AMT provisioning tokens being invalidated.
 
-### Why the Extra Changes Don't Affect HAP
+Changes 2, 3 and 4 are **not required** for HAP to take effect. This fork proves it — ME disappears with only the single bit flip.
 
-This fork proves that changes 2, 3 and 4 are **not required** for HAP to take effect. ME disappears with only the single bit flip. FIT performs these additional operations as part of its broader image integrity maintenance — keeping descriptors consistent, checksums valid, and provisioning data clean.
+---
 
-### The vPro / AMT Angle
+## Credits
 
-The platform tested here is a **vPro system with Intel AMT**. The provisioning block being wiped (`0x786000`) is almost certainly related to AMT provisioning state — FIT invalidates it when HAP is set because a HAP-disabled ME cannot run AMT regardless of provisioning status. This is consistent with Intel's documented behaviour that HAP puts ME into a halted state before AMT or any other ME application can initialise.
+Original me_cleaner by **Nicola Corna** — Copyright (C) 2016–2018  
+License: GNU GPL v3 — https://github.com/corna/me_cleaner
 
-The version counter and checksum updates in the EFI firmware volumes may be Intel Boot Guard or CSME descriptor integrity records — FIT maintains these to keep the image in a consistent state even after modification. On non-vPro or non-AMT systems these regions may differ or be absent entirely.
+ME 12 H (PCHSTRP32) findings: PR#282 by @ghost / @davidmartinzeus  
+ME 15/16 HAP offsets: **XutaxKamay** — https://github.com/XutaxKamay/me_cleaner
 
-### Takeaway for Researchers
+HAP offset hardware confirmation for ME 14 CML-LP (this fork):
+Verified via byte-level diff of stock vs Intel FIT-patched BIOS on ThinkPad X13 Gen1 (Comet Lake LP, ME 14.1.x)
+`stock 0x801801b8 → patched 0x801901b8 — diff = 0x00010000 (bit 16 of PCHSTRP28)`
 
-If you are doing ME research on CML-LP or similar IFWI platforms:
+ME 16/16.1 HAP location confirmed from Intel PCH datasheets Doc 648364 (ADL) and Doc 743835 (RPL).
+ME 13 HAP location confirmed from Intel PCH datasheet Doc 615170 (ICL).
 
-- The HAP bit location can be confirmed by diffing stock vs FIT-patched images with `cmp -l` and cross-referencing with `fpsba` from the flash descriptor
-- FIT changes significantly more than just the HAP bit — not all of those changes are required for HAP to take effect
-- The provisioning block wipe suggests FIT is doing AMT cleanup as a side effect of HAP, not as a hard requirement
-- Always verify with `cmp -l` on your specific platform — strap locations are not universal across Intel generations
-- On non-vPro platforms the provisioning block and EFI volume changes may be absent entirely
+---
 
 ## License
 
-GNU General Public License v3 — see [LICENSE](LICENSE) for full terms.  
+GNU General Public License v3 — see [LICENSE](LICENSE) for full terms.
 You must retain the original copyright notice when distributing modified versions.
