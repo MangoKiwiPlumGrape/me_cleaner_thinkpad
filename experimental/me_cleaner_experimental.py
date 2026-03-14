@@ -805,28 +805,29 @@ if __name__ == "__main__":
         version = unpack("<HHHH", mef.read(0x08))
 
         # --------------------------------------------------------
-        # PATCH: extended version → gen mapping
-        #   ME 12        → gen 4  (8th/9th gen, hw confirmed fpsba+0x70)
-        #   ME 13        → gen 4  (Ice Lake, datasheet confirmed Doc 615170, fpsba+0x70)
-        #   ME 14        → gen 5  (Comet Lake LP, hw confirmed fpsba+0x70)
-        #   ME 15        → gen 6  (Tiger Lake, community confirmed fpsba+0x7C PCHSTRP31)
-        #   ME 16 / 16.1 → gen 7  (Alder Lake / Raptor Lake, PCHSTRP31 bit 16)
-        #                          Intel 600-series datasheet confirmed: fpsba=0x100,
-        #                          PCHSTRP31 at 0x17C, byte write to 0x017E = same bit.
-        #   ME 18        → gen 7  (MTL — PLACEHOLDER ONLY, HAP path unconfirmed)
-        #                          MTL descriptor layout changed, no PCH straps at 0x100.
-        #                          IOE Soft Straps at 0xCAC. Needs gen 8 once confirmed.
+        # ME version → internal generation mapping
+        #
+        # gen 4: ME 12/13  — PCHSTRP28 at fpsba+0x70 (bit 16)
+        #   8th/9th gen (CFL/WHL), Ice Lake LP
+        #   hw confirmed (ME12), datasheet confirmed Doc 615170 (ME13)
+        # gen 5: ME 14     — PCHSTRP28 at fpsba+0x70 (bit 16)
+        #   Comet Lake LP — hw confirmed ThinkPad X13 Gen1
+        # gen 6: ME 15     — PCHSTRP31 at fpsba+0x7C (bit 16)
+        #   Tiger Lake — community confirmed
+        # gen 7: ME 16/16.1 — PCHSTRP31 bit 16 via byte write to 0x017E
+        #   Alder Lake / Raptor Lake — datasheet confirmed Doc 648364/743835
+        # gen 8: ME 18     — Meteor Lake PLACEHOLDER, no write performed
+        #   MTL tile architecture, no PCH straps at 0x100, HAP offset unconfirmed
         # --------------------------------------------------------
-        if version[0] == 12:
-            gen = 4
-        elif version[0] == 13:   # Ice Lake — LP HAP at fpsba+0x70
-            gen = 4
-        elif version[0] == 14:   # Comet Lake LP — HAP at fpsba+0x70 (hw confirmed)
-            gen = 5
-        elif version[0] == 15:   # Tiger Lake — HAP at fpsba+0x7C PCHSTRP31 bit 16
-            gen = 6
-        elif version[0] in (16, 18):  # ADL/RPL (ME 16/16.1) confirmed; MTL (ME 18) UNCONFIRMED
-            gen = 7                   # MTL PLACEHOLDER — descriptor layout changed on MTL
+        ME_VERSION_MAP = {
+            12: 4,   # Cannon/Whiskey Lake LP (ME 12)     — hw confirmed
+            13: 4,   # Ice Lake LP (ME 13)                — datasheet confirmed Doc 615170
+            14: 5,   # Comet Lake LP (ME 14)              — hw confirmed
+            15: 6,   # Tiger Lake (ME 15)                 — community confirmed
+            16: 7,   # Alder Lake (ME 16)                 — datasheet confirmed Doc 648364
+            18: 8,   # Meteor Lake (ME 18)                — UNCONFIRMED, write skipped
+        }
+        gen = ME_VERSION_MAP.get(version[0])
 
         print("ME/TXE firmware version {} (generation {})"
               .format('.'.join(str(i) for i in version), gen))
@@ -908,17 +909,18 @@ if __name__ == "__main__":
                   ("SET" if pchstrp31 & 1 << 16 else "NOT SET"))
 
         elif gen == 7:
-            # ADL/RPL (ME 16/16.1): HAP is PCHSTRP31 bit 16, byte write to 0x017E.
-            # 0x017E = byte 2 of PCHSTRP31 dword at fpsba+0x7C = bit 16. CONFIRMED.
-            # Intel 600-series PCH Datasheet Vol1 (Doc 648364): fpsba=0x100 confirmed.
-            # MTL (ME 18): THIS PATH IS UNCONFIRMED. MTL has no PCH Straps at 0x100.
-            # Descriptor layout changed — IOE Soft Straps at 0xCAC. 0x017E is in
-            # empty descriptor space on MTL. Result for MTL may be incorrect.
+            # ADL/RPL (ME 16/16.1): PCHSTRP31 bit 16 via byte at 0x017E.
+            # Datasheet confirmed: Doc 648364 (ADL), Doc 743835 (RPL).
             fdf.seek(0x17E)
             fd_hap_byte = unpack("B", fdf.read(1))[0]
             print("The HAP bit is " +
                   ("SET" if fd_hap_byte & 0x01 else "NOT SET") +
-                  " (PCHSTRP31 bit 16 via 0x017E — ADL/RPL confirmed; MTL UNCONFIRMED)")
+                  " (PCHSTRP31 bit 16 via 0x017E — ADL/RPL datasheet confirmed)")
+
+        elif gen == 8:
+            # Meteor Lake (ME 18) — HAP offset unconfirmed, cannot check reliably.
+            print("WARNING: Meteor Lake (ME 18) HAP bit status cannot be determined.")
+            print("  MTL has no PCH straps at 0x100. HAP offset unconfirmed.")
 
         else:
             fdf.seek(fpsba)
@@ -1121,20 +1123,11 @@ if __name__ == "__main__":
                     sys.exit("ERROR: HAP write failed — PCHSTRP31 bit 16 not set after write.")
 
             elif gen == 7:
-                # ADL/RPL (ME 16/16.1): HAP is PCHSTRP31 bit 16, byte 0x01 to 0x017E.
-                # 0x017E = byte 2 of PCHSTRP31 at fpsba+0x7C. Intel 600-series PCH
-                # Datasheet Vol1 (Doc 648364) confirms fpsba=0x100, PCHSTRP31 at 0x17C.
-                # MTL (ME 18) WARNING: descriptor layout changed on MTL. No PCH Straps
-                # at 0x100. IOE Soft Straps at 0xCAC. Write to 0x017E has NO EFFECT on
-                # MTL. This is a placeholder until MTL HAP offset is empirically confirmed.
+                # ADL/RPL (ME 16/16.1): PCHSTRP31 bit 16 via byte write to 0x017E.
+                # Datasheet confirmed: Doc 648364 (ADL), Doc 743835 (RPL).
                 print("Setting the HAP bit in PCHSTRP31 bit 16 (descriptor byte "
                       "0x017E) to disable Intel ME...")
-                if version[0] == 18:
-                    print("  WARNING: MTL (ME 18) HAP path UNCONFIRMED — descriptor")
-                    print("  layout changed. This write may have no effect on MTL.")
-                    print("  See project docs for details (IOE Soft Straps at 0xCAC).")
-                else:
-                    print("  (Alder Lake / Raptor Lake — Intel datasheet confirmed, Doc 648364)")
+                print("  (Alder Lake / Raptor Lake — Intel datasheet confirmed, Doc 648364)")
                 fdf.write_to(0x17E, pack("B", 0x01))
                 # Self-verify: read back and confirm the write took
                 fdf.seek(0x17E)
@@ -1144,6 +1137,18 @@ if __name__ == "__main__":
                 else:
                     sys.exit("ERROR: HAP write failed — byte 0x017E still reads "
                              "0x{:02X} after write. Image may be read-only.".format(verify_byte))
+
+            elif gen == 8:
+                # Meteor Lake (ME 18) — HAP offset UNCONFIRMED. Do NOT write.
+                # MTL uses tile architecture — no PCH straps at fpsba+0x100.
+                # HAP likely in IOE Soft Straps but exact offset/bit unconfirmed.
+                print("WARNING: Meteor Lake (ME 18) HAP offset is unconfirmed.")
+                print("  MTL has no PCH straps at 0x100 (tile architecture).")
+                print("  HAP write SKIPPED to avoid corrupting your image.")
+                print("  To help confirm the MTL offset, please open a GitHub issue")
+                print("  with a before/after binary diff of your MTL firmware dump")
+                print("  after using Intel FIT to set the HAP bit.")
+                sys.exit("ME 18 (Meteor Lake) HAP write skipped — offset unconfirmed.")
 
             else:
                 print("Setting the AltMeDisable bit in PCHSTRP10 to disable "
