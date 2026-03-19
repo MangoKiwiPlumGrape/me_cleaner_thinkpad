@@ -2,7 +2,7 @@
 
 # me_cleaner v1.3 — HAP Fork
 
-### Datasheet-confirmed Intel ME disable for 8th–15th gen Intel platforms
+### Datasheet-confirmed Intel ME disable for 8th–16th gen Intel platforms
 
 [![ME 12](https://img.shields.io/badge/ME%2012-confirmed-brightgreen?style=flat-square&logo=intel)](https://github.com/MangoKiwiPlumGrape/me_cleaner_thinkpad)
 [![ME 13](https://img.shields.io/badge/ME%2013-confirmed-brightgreen?style=flat-square&logo=intel)](https://github.com/MangoKiwiPlumGrape/me_cleaner_thinkpad)
