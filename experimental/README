@@ -2,7 +2,7 @@
 
 # me_cleaner — Experimental Branch
 
-### Same confirmed fixes as main, plus active research into ME 18 (Meteor Lake)
+### Same confirmed fixes as main, plus active MTL research
 
 [![ME 12](https://img.shields.io/badge/ME%2012-confirmed-brightgreen?style=flat-square&logo=intel)](https://github.com/MangoKiwiPlumGrape/me_cleaner_thinkpad)
 [![ME 13](https://img.shields.io/badge/ME%2013-confirmed-brightgreen?style=flat-square&logo=intel)](https://github.com/MangoKiwiPlumGrape/me_cleaner_thinkpad)
@@ -14,107 +14,73 @@
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue?style=flat-square)](https://www.gnu.org/licenses/gpl-3.0)
 [![Fork of](https://img.shields.io/badge/fork%20of-corna%2Fme__cleaner-lightgrey?style=flat-square)](https://github.com/corna/me_cleaner)
 
-> This branch contains everything in [main](../me_cleaner.py) plus active research code for platforms where the HAP offset has not yet been confirmed. Do not use the experimental branch on a machine you cannot recover — that is what the main branch is for.
-
 </div>
 
 ---
 
-## What is different from main
+For ME 12 through 16.1 this branch is functionally identical to main. Every confirmed HAP offset is the same. If you are on an 8th–13th gen platform either branch will do the same thing.
 
-The main branch is conservative. If an offset is not confirmed from hardware or an Intel document, it does not write. ME 18 (Meteor Lake) exits with a clear warning and leaves the image untouched.
-
-This branch is for people who understand the risk and want to help push the research forward. Specifically it adds diagnostic output for MTL that dumps the IOE Soft Straps region so you can share the data and help confirm the HAP offset.
-
-**For ME 12 through ME 16.1, the two branches are functionally identical.** All confirmed offsets are the same. If you are on an 8th–13th gen platform use either branch — they produce the same output.
+The difference is ME 18 (Meteor Lake). Main skips the write and exits cleanly. This branch does the same — but also dumps the IOE Soft Straps region so you can share the data and help confirm the offset.
 
 ---
 
-## The MTL Problem
+## Why ME 18 is not confirmed yet
 
-Meteor Lake dropped the discrete PCH entirely. The flash descriptor layout changed completely with the tile architecture. On every previous platform going back to 8th gen, the PCH Straps live at `fpsba = 0x100` and the HAP bit is in a known PCHSTRP register. On MTL none of that applies.
-
-What we know:
-- No PCH Straps at `0x100`
-- IOE Soft Straps region starts around `0xCAC` in the descriptor
-- HAP is almost certainly in that region, at a specific dword and bit — but which one has not been confirmed from a real MTL firmware dump
-
-What we do not know:
-- The exact dword offset within the IOE Soft Straps region
-- Whether it is still bit 16 of that dword, or a different bit
-- Whether the offset is the same across all MTL SKUs
-
-Writing a random guess to the IOE Soft Straps region on a real machine could corrupt the firmware image. This branch will not do that.
+Meteor Lake dropped the discrete PCH. The descriptor layout changed completely — no PCH Straps at `0x100`. HAP is almost certainly in the IOE Soft Straps region around `0xCAC`, but the exact dword and bit within that region has not been confirmed from a real firmware dump. Writing a guess to that region could corrupt the image, so we do not guess.
 
 ---
 
-## How to Help Confirm the MTL Offset
+## HAP locations
 
-If you have a Meteor Lake machine (Core Ultra 100 or 200 series, 14th gen) and are comfortable with firmware tooling, here is how to contribute:
-
-**Method 1 — Intel FIT (requires Windows)**
-
-1. Dump your BIOS with flashrom: `sudo flashrom -p internal -r stock.bin`
-2. Open the dump in Intel Flash Image Tool (FIT), enable the HAP/AltMeDisable option under ME settings, save the output image
-3. Run the diff tool: `python3 hap_diff.py stock.bin fit_output.bin`
-4. Open an issue with the output
-
-**Method 2 — BIOS toggle (if your BIOS exposes it)**
-
-Some MTL BIOSes have an ME disable option under advanced settings. If yours does:
-
-1. Dump BIOS before enabling it: `sudo flashrom -p internal -r before.bin`
-2. Enable ME disable in BIOS, reboot, dump again: `sudo flashrom -p internal -r after.bin`
-3. Run: `python3 hap_diff.py before.bin after.bin`
-4. Open an issue with the output
-
-**What hap_diff.py does:** it filters out all the noise FIT makes (checksum updates, version counters, provisioning blocks) and focuses specifically on changes in the IOE strap region, reporting the exact offset and bit that changed. One person with a dump is all it takes to confirm this.
-
-The `hap_diff.py` tool is in the [ifdtool-thinkpad](https://github.com/MangoKiwiPlumGrape/ifdtool_thinkpad) repo.
-
----
-
-## HAP Locations — Current Status
-
-| ME Version | Platform | HAP Location | Status |
+| ME | Platform | HAP location | Status |
 |---|---|---|---|
-| ME 12 LP | 8th/9th gen (Cannon/Whiskey/Coffee Lake U) | PCHSTRP28 — `fpsba+0x70` bit 16 | Confirmed |
-| ME 12 H | 8th/9th gen desktop (Z390/H370/B360) | PCHSTRP32 — `fpsba+0x80` bit 16 | Confirmed |
-| ME 13 | 10th gen Ice Lake LP | PCHSTRP28 — `fpsba+0x70` bit 16 | Confirmed |
-| ME 14 | 10th gen Comet Lake LP | PCHSTRP28 — `fpsba+0x70` bit 16 | Confirmed |
-| ME 15 LP | 11th gen Tiger Lake LP | PCHSTRP31 — `fpsba+0x7C` bit 16 | Confirmed |
-| ME 15 H | 11th/12th gen TGL-H / RKL-H | PCHSTRP37 — `fpsba+0x94` bit 16 | Confirmed |
-| ME 16 | 12th gen Alder Lake | PCHSTRP31 — `fpsba+0x7C` bit 16 | Confirmed |
-| ME 16.1 | 13th gen Raptor Lake | PCHSTRP31 — `fpsba+0x7C` bit 16 | Confirmed |
-| ME 18 | 14th gen Meteor Lake | IOE Soft Straps ~`0xCAC` + unknown offset | **Research — write skipped** |
+| ME 12 LP | 8th/9th gen U (CNL/WHL/CFL) | PCHSTRP28 `fpsba+0x70` bit 16 | Confirmed |
+| ME 12 H | 8th/9th gen desktop (Z390/H370) | PCHSTRP32 `fpsba+0x80` bit 16 | Confirmed |
+| ME 13 | 10th gen Ice Lake LP | PCHSTRP28 `fpsba+0x70` bit 16 | Confirmed |
+| ME 14 | 10th gen Comet Lake LP | PCHSTRP28 `fpsba+0x70` bit 16 | Confirmed |
+| ME 15 LP | 11th gen Tiger Lake LP | PCHSTRP31 `fpsba+0x7C` bit 16 | Confirmed |
+| ME 15 H | 11th/12th gen TGL-H / RKL-H | PCHSTRP37 `fpsba+0x94` bit 16 | Confirmed |
+| ME 16 | 12th gen Alder Lake | PCHSTRP31 `fpsba+0x7C` bit 16 | Confirmed |
+| ME 16.1 | 13th gen Raptor Lake | PCHSTRP31 `fpsba+0x7C` bit 16 | Confirmed |
+| ME 18 | 14th gen Meteor Lake | IOE Soft Straps ~`0xCAC` | Research — write skipped |
+
+---
+
+## How to help confirm the MTL offset
+
+If you have a Meteor Lake machine and can get a before/after firmware diff, one dump is all it takes.
+
+**Using Intel FIT (Windows):**
+
+1. Dump your BIOS: `sudo flashrom -p internal -r stock.bin`
+2. Open in Intel Flash Image Tool, enable HAP/AltMeDisable, save the output
+3. Run `python3 hap_diff.py stock.bin fit_output.bin`
+4. Open an issue with the output
+
+**Using a BIOS toggle (if your BIOS exposes ME disable):**
+
+1. `sudo flashrom -p internal -r before.bin`
+2. Enable ME disable in BIOS, reboot
+3. `sudo flashrom -p internal -r after.bin`
+4. Run `python3 hap_diff.py before.bin after.bin`
+5. Open an issue with the output
+
+`hap_diff.py` filters out all the FIT noise and focuses on the IOE strap region specifically. If it finds a single-bit change at bit 16 it prints the exact offset and the code to add to me_cleaner.
 
 ---
 
 ## Usage
 
-Identical to main. The only difference you will see on a non-MTL machine is the branch name in comments.
+Same as main.
 
-```bash
-# Check HAP state
+```
 python3 me_cleaner_experimental.py -c your_dump.bin
-
-# Set HAP bit
 python3 me_cleaner_experimental.py -s your_dump.bin -O patched.bin
 ```
-
-On an MTL machine, instead of writing, the tool will print the IOE Soft Straps region contents and instructions for sharing the data.
-
----
-
-## What Goes into Main
-
-Once an MTL HAP offset is confirmed from a real dump — either through this research or from someone else — it gets added to both branches simultaneously and the experimental branch moves on to the next unconfirmed platform (ARL, LNL, PTL).
-
-Confirmed data only ever goes into main. Guesses stay in experimental until proven.
 
 ---
 
 ## Credits
 
-Original me_cleaner by Nicola Corna — Copyright (C) 2016–2018  
-License: GNU GPL v3 — https://github.com/corna/me_cleaner
+Original me_cleaner by Nicola Corna — Copyright (C) 2016–2018
+GNU GPL v3 — https://github.com/corna/me_cleaner
