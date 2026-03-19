@@ -127,9 +127,12 @@ pubkeys_md5 = {
     "8e4f834644da2bef03039d69d41ecf02": ("ME",  ("14.x.x.x",)),
     "b29411f89bf20ed177d411c46e8ec185": ("ME",  ("15.x.x.x",)),
     "5887caf9b677601ffb257cc98a13d2a9": ("ME",  ("16.x.x.x",)),  # Consumer / non-vPro
-    "e7155f4342af9d1b7e4cac467190d382": ("ME",  ("16.1.x.x",)),  # Corporate / vPro ADL-P
-                                                                             # Confirmed: ThinkPad T14 Gen3 (i5-1245U), ME 16.1.38.2676
-                                                                             # Confirmed: ThinkPad T14 Gen3, ME 16.1.25.1932 (same key, earlier BIOS)
+    "e7155f4342af9d1b7e4cac467190d382": ("ME",  ("16.1.x.x",)),  # ME 16.1 RPL-H / ADL-P — widespread across Raptor Lake-H and Alder Lake-P platforms
+                                                                             # Confirmed: ThinkPad T14 Gen3 (ADL-P PCH, ME 16.1.38.2676)
+                                                                             # Confirmed: ThinkPad T14 Gen3, ME 16.1.25.1932
+                                                                             # Confirmed: Lenovo Legion Slim 7 16IRH8 (RPL-H, ADL-P PCH, ME 16.1.38.2676)
+                                                                             # Confirmed: MSI E7E06IMS (RPL-H, ME 16.1.25.2124)
+                                                                             # Same key across 16.1.25.x and 16.1.38.x — RPL-H/ADL-P share signing key
     "bda0b6bb8ca0bf0cac55ac4c4d55e0f2": ("TXE", ("1.x.x.x",)),
     "b726a2ab9cd59d4e62fe2bead7cf6997": ("TXE", ("1.x.x.x",)),
     "0633d7f951a3e7968ae7460861be9cfb": ("TXE", ("2.x.x.x",)),
