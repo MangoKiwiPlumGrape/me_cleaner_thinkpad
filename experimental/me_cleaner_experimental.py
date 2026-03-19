@@ -759,12 +759,25 @@ if __name__ == "__main__":
         if ftpr_header == b"":
             ftpr_matches = list((re.compile(br'\x24\x43\x50\x44........\x46\x54\x50\x52', re.DOTALL)).finditer(medata))
 
-            if (len(ftpr_matches) == 1):
+            if len(ftpr_matches) == 1:
                 ftpr_offset = ftpr_matches[0].span()[0]
                 ftpr_length = 0
                 print("  Note: FTPR not found in FPT table — located via $CPD")
                 print("  scan (known BPDT firmware quirk on ME 16+ IFWI).")
                 print("  HAP write is unaffected by this.")
+            elif len(ftpr_matches) > 1:
+                after_fpt = [m for m in ftpr_matches
+                             if m.span()[0] >= fpt_offset]
+                if after_fpt:
+                    best = min(after_fpt, key=lambda m: m.span()[0])
+                else:
+                    best = min(ftpr_matches, key=lambda m: m.span()[0])
+                ftpr_offset = best.span()[0]
+                ftpr_length = 0
+                print("  Note: multiple $CPD FTPR matches ({}) — using closest"
+                      " at offset {:#x} (BPDT IFWI quirk, HAP write"
+                      " unaffected).".format(len(ftpr_matches),
+                                             mef.region_start + ftpr_offset))
             else:
                 sys.exit("FTPR header not found, this image doesn't seem to be "
                         "valid")
