@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# hap_diff.sh — HAP bit finder for stock.bin vs FIT-patched firmware with Reserved=YES 
+# hap_diff.py — HAP bit finder for stock.bin vs FIT-patched firmware with Reserved=YES 
 #
 # Handles FIT output which changes many bytes (checksums, version counters,
 # provisioning blocks etc). Isolates the HAP bit change from the noise.
