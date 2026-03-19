@@ -716,10 +716,17 @@ if __name__ == "__main__":
             sys.exit("$FPT not found")
 
         if (len(fpt_matches) > 1):
-            sys.exit("more than one $FPT found")
+            # ME 16+ IFWI firmware commonly contains a backup/recovery FPT
+            # header in addition to the primary one. Rather than exiting, use
+            # the primary FPT (lowest offset within the ME region) and ignore
+            # the rest. This is normal firmware structure, not corruption.
+            fpt_matches = sorted(fpt_matches, key=lambda m: m.span()[0])
+            print("Found {:d} $FPT headers — using primary at offset {:#x}, "
+                  "ignoring backup FPT (normal on ME 16+ IFWI firmware)."
+                  .format(len(fpt_matches),
+                          mef.region_start + fpt_matches[0].span()[0]))
 
-        for fpt_match in fpt_matches:
-            fpt_offset = fpt_match.span()[0]
+        fpt_offset = fpt_matches[0].span()[0]
 
     if gen == 1:
         end_addr = 0
