@@ -31,7 +31,12 @@
 #     fpsba+0x70 bit 16 is the correct and confirmed HAP location for
 #     CML-LP. The old code used fpsba+0x80 which was WRONG for LP boards.
 #
-#  4. ME 15 (Tiger Lake) — fpsba+0x7C (PCHSTRP31 bit 16), community confirmed.
+#  4. ME 15 (Tiger Lake LP / Rocket Lake H / Tiger Lake H) — gen 6
+#     TGL-LP: fpsba+0x7C = PCHSTRP31 bit 16
+#       Datasheet confirmed: TGL-LP SPI Programming Guide (archive.org)
+#     RKL-H / TGL-H (Tiger Point PCH-H): fpsba+0x94 = PCHSTRP37 bit 16
+#       Datasheet confirmed: Rocketlake-H SPI Programming Guide (archive.org)
+#     LP vs H detected via heuristic — same approach as gen 4 (ME 12).
 #     XutaxKamay's guess was correct.
 #
 #  5. ME 16 / 16.1 (Alder Lake / Raptor Lake) — HAP at
@@ -59,7 +64,7 @@
 #       12 → gen 4  (8th/9th gen ThinkPad, confirmed)
 #       13 → gen 4  (Ice Lake, fpsba+0x70, datasheet confirmed Doc 615170)
 #       14 → gen 5  (10th gen ThinkPad CML-LP, hardware confirmed)
-#       15 → gen 6  (Tiger Lake, fpsba+0x7C PCHSTRP31, community confirmed)
+#       15 → gen 6  (TGL-LP: fpsba+0x7C PCHSTRP31 / RKL-H+TGL-H: fpsba+0x94 PCHSTRP37, datasheet confirmed)
 #       16 → gen 7  (Alder Lake, PCHSTRP31 bit 16, Intel datasheet confirmed)
 #       16.1→ gen 7  (Raptor Lake, same as ADL)
 #       18 → gen 7  (MTL — PLACEHOLDER ONLY, HAP path unconfirmed, see point 6)
@@ -77,7 +82,8 @@
 #   8th  gen ThinkPad (ME 12, CFL-U)      — fpsba+0x70 PCHSTRP28 bit 16  ✓ hw confirmed
 #   10th gen ThinkPad X13 (ME 14, CML-U)  — fpsba+0x70 PCHSTRP28 bit 16  ✓ hw confirmed
 #   Ice Lake (ME 13)                       — fpsba+0x70 PCHSTRP28 bit 16  ✓ datasheet confirmed (Doc 615170)
-#   Tiger Lake (ME 15)                     — fpsba+0x7C PCHSTRP31 bit 16  ✓ community confirmed
+#   Tiger Lake LP (ME 15)                  — fpsba+0x7C PCHSTRP31 bit 16  ✓ datasheet confirmed (TGL-LP SPI Guide, archive.org)
+#   RKL-H / TGL-H (ME 15)                — fpsba+0x94 PCHSTRP37 bit 16  ✓ datasheet confirmed (RKL-H SPI Guide, archive.org)
 #   Alder Lake (ME 16)                     — fpsba+0x7C PCHSTRP31 bit 16  ✓ Intel datasheet confirmed
 #                                            (Doc 648364, byte write to 0x017E = same bit)
 #   Raptor Lake (ME 16.1)                  — fpsba+0x7C PCHSTRP31 bit 16  ✓ community confirmed
@@ -816,8 +822,11 @@ if __name__ == "__main__":
         #   hw confirmed (ME12), datasheet confirmed Doc 615170 (ME13)
         # gen 5: ME 14     — PCHSTRP28 at fpsba+0x70 (bit 16)
         #   Comet Lake LP — hw confirmed ThinkPad X13 Gen1
-        # gen 6: ME 15     — PCHSTRP31 at fpsba+0x7C (bit 16)
-        #   Tiger Lake — community confirmed
+        # gen 6: ME 15     — TGL-LP: PCHSTRP31 at fpsba+0x7C (bit 16)
+        #                    RKL-H/TGL-H: PCHSTRP37 at fpsba+0x94 (bit 16)
+        #   LP vs H detected via heuristic (same as gen 4)
+        #   TGL-LP datasheet confirmed: TGL-LP SPI Programming Guide (archive.org)
+        #   RKL-H datasheet confirmed: Rocketlake-H SPI Programming Guide (archive.org)
         # gen 7: ME 16/16.1 — PCHSTRP31 bit 16 via byte write to 0x017E
         #   Alder Lake / Raptor Lake — datasheet confirmed Doc 648364/743835
         # gen 8: ME 18     — Meteor Lake PLACEHOLDER, no write performed
@@ -907,10 +916,25 @@ if __name__ == "__main__":
                   ("SET" if pchstrp28 & 1 << 16 else "NOT SET"))
 
         elif gen == 6:
+            # TGL-LP: PCHSTRP31 at fpsba+0x7C (datasheet confirmed)
+            # RKL-H/TGL-H: PCHSTRP37 at fpsba+0x94 (datasheet confirmed)
+            # Use LP/H heuristic — same approach as gen 4 (ME 12/13)
             fdf.seek(fpsba + 0x7C)
-            pchstrp31 = unpack("<I", fdf.read(4))[0]
-            print("The HAP bit is " +
-                  ("SET" if pchstrp31 & 1 << 16 else "NOT SET"))
+            val_7c = unpack("<I", fdf.read(4))[0]
+            fdf.seek(fpsba + 0x94)
+            val_94 = unpack("<I", fdf.read(4))[0]
+            if val_94 & (1 << 16):
+                print("The HAP bit is SET" +
+                      " (PCHSTRP37 at fpsba+0x94 — RKL-H/TGL-H datasheet confirmed)")
+            elif val_7c & (1 << 16):
+                print("The HAP bit is SET" +
+                      " (PCHSTRP31 at fpsba+0x7C — TGL-LP datasheet confirmed)")
+            elif val_94 != 0:
+                print("The HAP bit is NOT SET" +
+                      " (PCHSTRP37 bit 16 — RKL-H/TGL-H platform detected)")
+            else:
+                print("The HAP bit is NOT SET" +
+                      " (PCHSTRP31 bit 16 — TGL-LP platform assumed)")
 
         elif gen == 7:
             # ADL/RPL (ME 16/16.1): PCHSTRP31 bit 16 via byte at 0x017E.
@@ -1115,16 +1139,40 @@ if __name__ == "__main__":
                     sys.exit("ERROR: HAP write failed — PCHSTRP28 bit 16 not set after write.")
 
             elif gen == 6:
-                print("Setting the HAP bit in PCHSTRP31 to disable Intel ME...")
-                pchstrp31 |= (1 << 16)
-                fdf.write_to(fpsba + 0x7C, pack("<I", pchstrp31))
-                # Self-verify
-                fdf.seek(fpsba + 0x7C)
-                verify_strp = unpack("<I", fdf.read(4))[0]
-                if verify_strp & (1 << 16):
-                    print("  HAP write verified: PCHSTRP31 = 0x{:08X} ✓".format(verify_strp))
+                # TGL-LP: PCHSTRP31 at fpsba+0x7C (datasheet confirmed)
+                # RKL-H/TGL-H: PCHSTRP37 at fpsba+0x94 (datasheet confirmed)
+                # Use LP/H heuristic — check fpsba+0x94 first (H-series has
+                # non-zero value there), fall back to LP (fpsba+0x7C)
+                fdf.seek(fpsba + 0x94)
+                val_94 = unpack("<I", fdf.read(4))[0]
+                if val_94 != 0:
+                    # H-series platform (RKL-H or TGL-H, Tiger Point PCH-H)
+                    print("Setting the HAP bit in PCHSTRP37 (fpsba+0x94) to disable Intel ME...")
+                    print("  (RKL-H / TGL-H — Tiger Point PCH-H, datasheet confirmed)")
+                    val_94 |= (1 << 16)
+                    fdf.write_to(fpsba + 0x94, pack("<I", val_94))
+                    # Self-verify
+                    fdf.seek(fpsba + 0x94)
+                    verify_strp = unpack("<I", fdf.read(4))[0]
+                    if verify_strp & (1 << 16):
+                        print("  HAP write verified: PCHSTRP37 = 0x{:08X} ✓".format(verify_strp))
+                    else:
+                        sys.exit("ERROR: HAP write failed — PCHSTRP37 bit 16 not set after write.")
                 else:
-                    sys.exit("ERROR: HAP write failed — PCHSTRP31 bit 16 not set after write.")
+                    # LP platform (TGL-LP, TGL PCH-LP)
+                    fdf.seek(fpsba + 0x7C)
+                    val_7c = unpack("<I", fdf.read(4))[0]
+                    print("Setting the HAP bit in PCHSTRP31 (fpsba+0x7C) to disable Intel ME...")
+                    print("  (Tiger Lake LP — TGL PCH-LP, datasheet confirmed)")
+                    val_7c |= (1 << 16)
+                    fdf.write_to(fpsba + 0x7C, pack("<I", val_7c))
+                    # Self-verify
+                    fdf.seek(fpsba + 0x7C)
+                    verify_strp = unpack("<I", fdf.read(4))[0]
+                    if verify_strp & (1 << 16):
+                        print("  HAP write verified: PCHSTRP31 = 0x{:08X} ✓".format(verify_strp))
+                    else:
+                        sys.exit("ERROR: HAP write failed — PCHSTRP31 bit 16 not set after write.")
 
             elif gen == 7:
                 # ADL/RPL (ME 16/16.1): PCHSTRP31 bit 16 via byte write to 0x017E.
