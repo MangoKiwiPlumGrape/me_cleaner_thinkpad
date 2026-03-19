@@ -52,17 +52,14 @@
 #     (new ADL section) are internal to CSME firmware and unrelated to HAP.
 #     ME 16 and 16.1 confirmed. DO NOT group ME 18 here — see point 6.
 #
-#  6. ME 18 (Meteor Lake) — HAP location UNCONFIRMED / POTENTIALLY WRONG.
-#     MTL dropped the discrete PCH (tile architecture). Flash descriptor layout
-#     is completely different — there are NO PCH Straps at 0x100:
-#       IOE PMC Straps at 0xC6C  (new)
-#       IOE Soft Straps at 0xCAC (new — likely HAP location)
-#       Processor Straps at 0xCEC
-#       CSME Straps at 0xD8C
-#     Current gen 7 code writes to 0x017E which falls in empty descriptor space
-#     on MTL and will have NO EFFECT. MTL needs a new gen (gen 8) once the
-#     correct HAP offset within IOE Soft Straps (0xCAC+N) is empirically
-#     confirmed from a real MTL firmware dump.
+#  6. ME 18 (Meteor Lake) — HAP at absolute byte offset 0x21E
+#     Source: Dasharo coreboot me_spec_18.h: HAP_OFFSET = 0x21E (MTL U/H)
+#     Analysis: 0x21E = fpsba(0x1A0) + PCHSTRP31_offset(0x7C) + byte2(0x02)
+#     Same strap structure as ADL/RPL — PCHSTRP31 bit 16 — fpsba moved to 0x1A0
+#     MTL dropped the discrete PCH (tile architecture). No PCH Straps at 0x100.
+#     fpsba appears to be at 0x1A0 on MTL based on back-calculation from Dasharo.
+#     EXPERIMENTAL: Dasharo source only. Not yet confirmed from hardware dump
+#     or Intel MTL SPI Programming Guide. Main branch still skips write for safety.
 #     Source: Intel Core Ultra CPU Datasheet Vol1 Doc 792044.
 #
 #  7. Version → gen mapping:
@@ -72,7 +69,7 @@
 #       15 → gen 6  (TGL-LP: fpsba+0x7C PCHSTRP31 / RKL-H+TGL-H: fpsba+0x94 PCHSTRP37, datasheet confirmed)
 #       16 → gen 7  (Alder Lake, PCHSTRP31 bit 16, Intel datasheet confirmed)
 #       16.1→ gen 7  (Raptor Lake, same as ADL)
-#       18 → gen 7  (MTL — PLACEHOLDER ONLY, HAP path unconfirmed, see point 6)
+#       18 → gen 8  (MTL — HAP at byte 0x21E, Dasharo source, experimental)
 #
 #  7. IFWI firmware (gen >= 4): module removal is skipped with a clear
 #     warning. HAP bit is still set correctly. Attempting partition
@@ -89,12 +86,13 @@
 #   Ice Lake (ME 13)                       — fpsba+0x70 PCHSTRP28 bit 16  ✓ datasheet confirmed (Doc 615170)
 #   Tiger Lake LP (ME 15)                  — fpsba+0x7C PCHSTRP31 bit 16  ✓ datasheet confirmed (TGL-LP SPI Guide, archive.org)
 #   RKL-H / TGL-H (ME 15)                — fpsba+0x94 PCHSTRP37 bit 16  ✓ datasheet confirmed (RKL-H SPI Guide, archive.org)
+#                                            ✓ community confirmed: ASRock B560M + Asus Z590 (minhkhoi89, PR #384 Dec 2025)
 #   Alder Lake (ME 16)                     — fpsba+0x7C PCHSTRP31 bit 16  ✓ Intel datasheet confirmed
 #                                            (Doc 648364, byte write to 0x017E = same bit)
 #   Raptor Lake (ME 16.1)                  — fpsba+0x7C PCHSTRP31 bit 16  ✓ community confirmed
-#   Meteor Lake (ME 18)                    — WARNING: descriptor layout changed, HAP UNCONFIRMED
-#                                            No PCH Straps at 0x100 on MTL. IOE Soft Straps at
-#                                            0xCAC. Current gen 7 path (0x017E) is WRONG for MTL.
+#   Meteor Lake (ME 18)                    — byte 0x21E bit 0  (experimental)
+#                                            Source: Dasharo coreboot me_spec_18.h
+#                                            fpsba=0x1A0, PCHSTRP31 bit 16 = byte 0x21E
 # ============================================================
 
 from __future__ import division, print_function
@@ -590,18 +588,34 @@ def start_end_to_flreg(start, end):
 # (strap is populated) use 0x70 (LP). Otherwise fall back to 0x80 (H).
 # ============================================================
 def get_hap_offset_lp_or_h(fdf, fpsba):
-    """Return (pchstrp_value, byte_offset, name) for ME 12/13 LP vs H."""
+    """Return (pchstrp_value, byte_offset, name) for ME 12/13 LP vs H vs JSL.
+
+    Covers three PCH variants that share ME 12/13:
+      JSL (Jasper Lake, Atom N-series): PCHSTRP26 at fpsba+0x68 bit 16
+        Dasharo me_spec_13.h: HAP_OFFSET=0x16A (SOC_INTEL_JASPERLAKE)
+      ICL/CFL-U (Ice/Comet Lake LP, mobile): PCHSTRP28 at fpsba+0x70 bit 16
+        Datasheet confirmed: Doc 615170 (ICL), hardware confirmed (CFL-U ME 12)
+      ME12-H (Cannon Lake H, desktop): PCHSTRP32 at fpsba+0x80 bit 16
+        Hardware confirmed: PR#282
+    Detection: check 0x68 first (JSL), then 0x70 (LP), then 0x80 (H).
+    """
+    fdf.seek(fpsba + 0x68)
+    val_68 = unpack("<I", fdf.read(4))[0]
     fdf.seek(fpsba + 0x70)
     val_70 = unpack("<I", fdf.read(4))[0]
     fdf.seek(fpsba + 0x80)
     val_80 = unpack("<I", fdf.read(4))[0]
 
-    if val_70 != 0:
+    if val_68 != 0 and val_70 == 0:
+        # JSL (Jasper Lake, Atom N-series) — PCHSTRP26 at fpsba+0x68
+        # Dasharo me_spec_13.h: HAP_OFFSET=0x16A
+        return val_68, 0x68, "PCHSTRP26 at fpsba+0x68 (Jasper Lake, Dasharo confirmed)"
+    elif val_70 != 0:
         return val_70, 0x70, "PCHSTRP28 at fpsba+0x70 (LP/U-series)"
     elif val_80 != 0:
         return val_80, 0x80, "PCHSTRP32 at fpsba+0x80 (H/desktop)"
     else:
-        return val_70, 0x70, "PCHSTRP28 at fpsba+0x70 (LP assumed — both straps zero)"
+        return val_70, 0x70, "PCHSTRP28 at fpsba+0x70 (LP assumed — straps zero)"
 
 
 if __name__ == "__main__":
@@ -849,10 +863,13 @@ if __name__ == "__main__":
         #   LP vs H detected via heuristic (same as gen 4)
         #   TGL-LP datasheet confirmed: TGL-LP SPI Programming Guide (archive.org)
         #   RKL-H datasheet confirmed: Rocketlake-H SPI Programming Guide (archive.org)
-        # gen 7: ME 16/16.1 — PCHSTRP31 bit 16 via byte write to 0x017E
+        # gen 7: ME 16/16.1 — PCH-P/N: byte 0x017E / PCH-S desktop: byte 0x01DE
+        #   PCH-S vs PCH-P/N detected via heuristic (same pattern as gen 4/6)
+        #   Dasharo me_spec_16.h: HAP_OFFSET=0x17E (P/N) / 0x1DE (S)
         #   Alder Lake / Raptor Lake — datasheet confirmed Doc 648364/743835
-        # gen 8: ME 18     — Meteor Lake PLACEHOLDER, no write performed
-        #   MTL tile architecture, no PCH straps at 0x100, HAP offset unconfirmed
+        # gen 8: ME 18     — Meteor Lake, HAP at byte 0x21E (Dasharo source)
+        #   fpsba=0x1A0 on MTL, PCHSTRP31 bit 16, byte write to 0x21E
+        #   EXPERIMENTAL: Dasharo coreboot me_spec_18.h, not yet hardware confirmed
         # --------------------------------------------------------
         ME_VERSION_MAP = {
             12: 4,   # Cannon/Whiskey Lake LP (ME 12)     — hw confirmed
@@ -860,7 +877,7 @@ if __name__ == "__main__":
             14: 5,   # Comet Lake LP (ME 14)              — hw confirmed
             15: 6,   # Tiger Lake (ME 15)                 — community confirmed
             16: 7,   # Alder Lake (ME 16)                 — datasheet confirmed Doc 648364
-            18: 8,   # Meteor Lake (ME 18)                — UNCONFIRMED, write skipped
+            18: 8,   # Meteor Lake (ME 18)                — byte 0x21E (Dasharo source, experimental)
         }
         gen = ME_VERSION_MAP.get(version[0])
 
@@ -926,51 +943,103 @@ if __name__ == "__main__":
                   ("SET" if pchstrp_val & 1 << 16 else "NOT SET"))
 
         # --------------------------------------------------------
-        # PATCH: gen 5 = ME 14 (Comet Lake LP / Tiger Lake)
-        # HARDWARE CONFIRMED: ThinkPad X13 Gen1 (CML-U, 10th gen)
-        #   fpsba+0x70 (PCHSTRP28), bit 16
-        #   stock=0x801801b8 → patched=0x801901b8 (diff=0x00010000)
+        # PATCH: gen 5 = ME 14 (Comet Lake) — LP/S split
+        #   CML-LP (mobile, ThinkPads): PCHSTRP28 at fpsba+0x70 bit 16
+        #     Hardware confirmed: ThinkPad X13 Gen1 (CML-U, ME 14.1.77.2497)
+        #     Dasharo me_spec_12.h: HAP_OFFSET=0x172 (SOC_INTEL_COMETLAKE_1/2)
+        #   CML-S (desktop Z490/H470/B460): PCHSTRP32 at fpsba+0x80 bit 16
+        #     Dasharo me_spec_12.h: HAP_OFFSET=0x182 (SOC_INTEL_COMETLAKE_S)
+        # Heuristic: fpsba+0x80 non-zero = CML-S desktop
         # --------------------------------------------------------
         elif gen == 5:
-            fdf.seek(fpsba + 0x70)
-            pchstrp28 = unpack("<I", fdf.read(4))[0]
-            print("The HAP bit is " +
-                  ("SET" if pchstrp28 & 1 << 16 else "NOT SET"))
+            fdf.seek(fpsba + 0x80)
+            val_80 = unpack("<I", fdf.read(4))[0]
+            if val_80 != 0:
+                # CML-S desktop (Z490/H470/B460/H410)
+                print("The HAP bit is " +
+                      ("SET" if val_80 & 1 << 16 else "NOT SET") +
+                      " (PCHSTRP32 at fpsba+0x80 — CML-S desktop,"
+                      " Dasharo me_spec_12.h confirmed)")
+            else:
+                fdf.seek(fpsba + 0x70)
+                pchstrp28 = unpack("<I", fdf.read(4))[0]
+                print("The HAP bit is " +
+                      ("SET" if pchstrp28 & 1 << 16 else "NOT SET") +
+                      " (PCHSTRP28 at fpsba+0x70 — CML-LP mobile, hardware confirmed)")
 
         elif gen == 6:
             # TGL-LP: PCHSTRP31 at fpsba+0x7C (datasheet confirmed)
             # RKL-H/TGL-H: PCHSTRP37 at fpsba+0x94 (datasheet confirmed)
+            #   Community confirmed: ASRock B560M Steel Legend (Tiger Point PCH-H)
+            #   Community confirmed: Asus TUF Z590 Gaming (Tiger Point PCH-H)
+            #   Source: minhkhoi89, XutaxKamay PR #384, Dec 2025
+            #   Also confirmed: ME 15.0.21.1549 (skullface101, same PR)
             # Use LP/H heuristic — same approach as gen 4 (ME 12/13)
             fdf.seek(fpsba + 0x7C)
             val_7c = unpack("<I", fdf.read(4))[0]
+            fdf.seek(fpsba + 0x84)
+            val_84 = unpack("<I", fdf.read(4))[0]
             fdf.seek(fpsba + 0x94)
             val_94 = unpack("<I", fdf.read(4))[0]
             if val_94 & (1 << 16):
                 print("The HAP bit is SET" +
                       " (PCHSTRP37 at fpsba+0x94 — RKL-H/TGL-H datasheet confirmed)")
+            elif val_84 & (1 << 16):
+                print("The HAP bit is SET" +
+                      " (PCHSTRP33 at fpsba+0x84 — EHL Elkhart Lake,"
+                      " Dasharo me_spec_15.h confirmed)")
             elif val_7c & (1 << 16):
                 print("The HAP bit is SET" +
                       " (PCHSTRP31 at fpsba+0x7C — TGL-LP datasheet confirmed)")
             elif val_94 != 0:
                 print("The HAP bit is NOT SET" +
                       " (PCHSTRP37 bit 16 — RKL-H/TGL-H platform detected)")
+            elif val_84 != 0:
+                print("The HAP bit is NOT SET" +
+                      " (PCHSTRP33 bit 16 — EHL Elkhart Lake platform detected)")
             else:
                 print("The HAP bit is NOT SET" +
                       " (PCHSTRP31 bit 16 — TGL-LP platform assumed)")
 
         elif gen == 7:
-            # ADL/RPL (ME 16/16.1): PCHSTRP31 bit 16 via byte at 0x017E.
-            # Datasheet confirmed: Doc 648364 (ADL), Doc 743835 (RPL).
-            fdf.seek(0x17E)
-            fd_hap_byte = unpack("B", fdf.read(1))[0]
-            print("The HAP bit is " +
-                  ("SET" if fd_hap_byte & 0x01 else "NOT SET") +
-                  " (PCHSTRP31 bit 16 via 0x017E — ADL/RPL datasheet confirmed)")
+            # ADL/RPL (ME 16/16.1) — two PCH variants with different HAP offsets:
+            #   ADL/RPL PCH-P/N (mobile): PCHSTRP31 bit 16 via byte 0x017E
+            #     Datasheet confirmed: Doc 648364 (ADL-P), Doc 743835 (RPL)
+            #     Dasharo me_spec_16.h: HAP_OFFSET=0x17E (SOC_INTEL_ALDERLAKE_PCH_P/N)
+            #   ADL PCH-S (desktop Z690/H670/B660): PCHSTRP55 bit 16 via byte 0x01DE
+            #     Dasharo me_spec_16.h: HAP_OFFSET=0x1DE (SOC_INTEL_ALDERLAKE_PCH_S)
+            # Heuristic: check dword at 0x1DC — non-zero = PCH-S desktop
+            fdf.seek(0x1DC)
+            val_s = unpack("<I", fdf.read(4))[0]
+            if val_s != 0:
+                # PCH-S desktop platform (ADL-S: Z690/H670/B660 etc)
+                fdf.seek(0x1DE)
+                fd_hap_byte = unpack("B", fdf.read(1))[0]
+                print("The HAP bit is " +
+                      ("SET" if fd_hap_byte & 0x01 else "NOT SET") +
+                      " (PCHSTRP55 bit 16 via 0x01DE — ADL PCH-S desktop,"
+                      " Dasharo me_spec_16.h confirmed)")
+            else:
+                # PCH-P/N mobile platform (ThinkPads, ADL-P/N)
+                fdf.seek(0x17E)
+                fd_hap_byte = unpack("B", fdf.read(1))[0]
+                print("The HAP bit is " +
+                      ("SET" if fd_hap_byte & 0x01 else "NOT SET") +
+                      " (PCHSTRP31 bit 16 via 0x017E — ADL/RPL PCH-P/N,"
+                      " datasheet confirmed Doc 648364)")
 
         elif gen == 8:
-            # Meteor Lake (ME 18) — HAP offset unconfirmed, cannot check reliably.
-            print("WARNING: Meteor Lake (ME 18) HAP bit status cannot be determined.")
-            print("  MTL has no PCH straps at 0x100. HAP offset unconfirmed.")
+            # Meteor Lake (ME 18) — HAP at absolute offset 0x21E (byte write)
+            # Source: Dasharo coreboot me_spec_18.h:
+            #   #define HAP_OFFSET 0x21E (for SOC_INTEL_METEORLAKE_U_H)
+            # Analysis: 0x21E = fpsba(0x1A0) + 0x7C(PCHSTRP31) + 0x02(byte 2 = bit 16)
+            # Same strap structure as ADL/RPL (PCHSTRP31 bit 16), fpsba moved to 0x1A0
+            # EXPERIMENTAL — not yet confirmed from hardware dump or Intel SPI guide
+            fdf.seek(0x21E)
+            hap_byte = unpack("B", fdf.read(1))[0]
+            print("The HAP bit is " +
+                  ("SET" if hap_byte & 0x01 else "NOT SET") +
+                  " (MTL byte 0x21E — Dasharo coreboot source, experimental)")
 
         else:
             fdf.seek(fpsba)
@@ -1145,26 +1214,44 @@ if __name__ == "__main__":
                 fdf.write_to(fpsba + hap_offset, pack("<I", pchstrp_val))
 
             elif gen == 5:
-                # CONFIRMED: CML-LP ThinkPad X13 Gen1 — fpsba+0x70, bit 16
-                fdf.seek(fpsba + 0x70)
-                pchstrp28 = unpack("<I", fdf.read(4))[0]
-                print("Setting the HAP bit in PCHSTRP28 (fpsba+0x70) to disable Intel ME...")
-                print("  (Confirmed: ThinkPad X13 Gen1, CML-U LP, ME 14)")
-                pchstrp28 |= (1 << 16)
-                fdf.write_to(fpsba + 0x70, pack("<I", pchstrp28))
-                # Self-verify
-                fdf.seek(fpsba + 0x70)
-                verify_strp = unpack("<I", fdf.read(4))[0]
-                if verify_strp & (1 << 16):
-                    print("  HAP write verified: PCHSTRP28 = 0x{:08X} ✓".format(verify_strp))
+                # CML-S desktop: PCHSTRP32 at fpsba+0x80 — Dasharo me_spec_12.h confirmed
+                # CML-LP mobile: PCHSTRP28 at fpsba+0x70 — hardware confirmed (X13 Gen1)
+                fdf.seek(fpsba + 0x80)
+                val_80 = unpack("<I", fdf.read(4))[0]
+                if val_80 != 0:
+                    # CML-S desktop (Z490/H470/B460/H410)
+                    print("Setting the HAP bit in PCHSTRP32 (fpsba+0x80) to disable Intel ME...")
+                    print("  (CML-S desktop — Dasharo me_spec_12.h confirmed)")
+                    val_80 |= (1 << 16)
+                    fdf.write_to(fpsba + 0x80, pack("<I", val_80))
+                    fdf.seek(fpsba + 0x80)
+                    verify_strp = unpack("<I", fdf.read(4))[0]
+                    if verify_strp & (1 << 16):
+                        print("  HAP write verified: PCHSTRP32 = 0x{:08X} ✓".format(verify_strp))
+                    else:
+                        sys.exit("ERROR: HAP write failed — PCHSTRP32 bit 16 not set after write.")
                 else:
-                    sys.exit("ERROR: HAP write failed — PCHSTRP28 bit 16 not set after write.")
+                    # CML-LP mobile (ThinkPads, X13/T14/L14 Gen1)
+                    fdf.seek(fpsba + 0x70)
+                    pchstrp28 = unpack("<I", fdf.read(4))[0]
+                    print("Setting the HAP bit in PCHSTRP28 (fpsba+0x70) to disable Intel ME...")
+                    print("  (CML-LP mobile — hardware confirmed, ThinkPad X13 Gen1)")
+                    pchstrp28 |= (1 << 16)
+                    fdf.write_to(fpsba + 0x70, pack("<I", pchstrp28))
+                    fdf.seek(fpsba + 0x70)
+                    verify_strp = unpack("<I", fdf.read(4))[0]
+                    if verify_strp & (1 << 16):
+                        print("  HAP write verified: PCHSTRP28 = 0x{:08X} ✓".format(verify_strp))
+                    else:
+                        sys.exit("ERROR: HAP write failed — PCHSTRP28 bit 16 not set after write.")
 
             elif gen == 6:
                 # TGL-LP: PCHSTRP31 at fpsba+0x7C (datasheet confirmed)
                 # RKL-H/TGL-H: PCHSTRP37 at fpsba+0x94 (datasheet confirmed)
                 # Use LP/H heuristic — check fpsba+0x94 first (H-series has
                 # non-zero value there), fall back to LP (fpsba+0x7C)
+                fdf.seek(fpsba + 0x84)
+                val_84 = unpack("<I", fdf.read(4))[0]
                 fdf.seek(fpsba + 0x94)
                 val_94 = unpack("<I", fdf.read(4))[0]
                 if val_94 != 0:
@@ -1173,13 +1260,25 @@ if __name__ == "__main__":
                     print("  (RKL-H / TGL-H — Tiger Point PCH-H, datasheet confirmed)")
                     val_94 |= (1 << 16)
                     fdf.write_to(fpsba + 0x94, pack("<I", val_94))
-                    # Self-verify
                     fdf.seek(fpsba + 0x94)
                     verify_strp = unpack("<I", fdf.read(4))[0]
                     if verify_strp & (1 << 16):
                         print("  HAP write verified: PCHSTRP37 = 0x{:08X} ✓".format(verify_strp))
                     else:
                         sys.exit("ERROR: HAP write failed — PCHSTRP37 bit 16 not set after write.")
+                elif val_84 != 0:
+                    # EHL (Elkhart Lake, Atom x6000) — PCHSTRP33 at fpsba+0x84
+                    # Dasharo me_spec_15.h: HAP_OFFSET=0x186 (SOC_INTEL_ELKHARTLAKE)
+                    print("Setting the HAP bit in PCHSTRP33 (fpsba+0x84) to disable Intel ME...")
+                    print("  (Elkhart Lake — Dasharo me_spec_15.h confirmed)")
+                    val_84 |= (1 << 16)
+                    fdf.write_to(fpsba + 0x84, pack("<I", val_84))
+                    fdf.seek(fpsba + 0x84)
+                    verify_strp = unpack("<I", fdf.read(4))[0]
+                    if verify_strp & (1 << 16):
+                        print("  HAP write verified: PCHSTRP33 = 0x{:08X} ✓".format(verify_strp))
+                    else:
+                        sys.exit("ERROR: HAP write failed — PCHSTRP33 bit 16 not set after write.")
                 else:
                     # LP platform (TGL-LP, TGL PCH-LP)
                     fdf.seek(fpsba + 0x7C)
@@ -1188,7 +1287,6 @@ if __name__ == "__main__":
                     print("  (Tiger Lake LP — TGL PCH-LP, datasheet confirmed)")
                     val_7c |= (1 << 16)
                     fdf.write_to(fpsba + 0x7C, pack("<I", val_7c))
-                    # Self-verify
                     fdf.seek(fpsba + 0x7C)
                     verify_strp = unpack("<I", fdf.read(4))[0]
                     if verify_strp & (1 << 16):
@@ -1197,32 +1295,60 @@ if __name__ == "__main__":
                         sys.exit("ERROR: HAP write failed — PCHSTRP31 bit 16 not set after write.")
 
             elif gen == 7:
-                # ADL/RPL (ME 16/16.1): PCHSTRP31 bit 16 via byte write to 0x017E.
-                # Datasheet confirmed: Doc 648364 (ADL), Doc 743835 (RPL).
-                print("Setting the HAP bit in PCHSTRP31 bit 16 (descriptor byte "
-                      "0x017E) to disable Intel ME...")
-                print("  (Alder Lake / Raptor Lake — Intel datasheet confirmed, Doc 648364)")
-                fdf.write_to(0x17E, pack("B", 0x01))
-                # Self-verify: read back and confirm the write took
-                fdf.seek(0x17E)
-                verify_byte = unpack("B", fdf.read(1))[0]
-                if verify_byte & 0x01:
-                    print("  HAP write verified: byte 0x017E = 0x{:02X} ✓".format(verify_byte))
+                # ADL/RPL (ME 16/16.1) — PCH-S desktop vs PCH-P/N mobile split
+                # ADL PCH-S: PCHSTRP55 bit 16, byte 0x01DE
+                #   Dasharo me_spec_16.h: HAP_OFFSET=0x1DE (SOC_INTEL_ALDERLAKE_PCH_S)
+                # ADL/RPL PCH-P/N: PCHSTRP31 bit 16, byte 0x017E
+                #   Datasheet confirmed: Doc 648364 (ADL-P), Doc 743835 (RPL)
+                #   Dasharo me_spec_16.h: HAP_OFFSET=0x17E (SOC_INTEL_ALDERLAKE_PCH_P/N)
+                fdf.seek(0x1DC)
+                val_s = unpack("<I", fdf.read(4))[0]
+                if val_s != 0:
+                    # PCH-S desktop (Z690/H670/B660 etc)
+                    print("Setting the HAP bit in PCHSTRP55 bit 16 (descriptor byte "
+                          "0x01DE) to disable Intel ME...")
+                    print("  (Alder Lake PCH-S desktop — Dasharo me_spec_16.h confirmed)")
+                    fdf.write_to(0x1DE, pack("B", 0x01))
+                    fdf.seek(0x1DE)
+                    verify_byte = unpack("B", fdf.read(1))[0]
+                    if verify_byte & 0x01:
+                        print("  HAP write verified: byte 0x01DE = 0x{:02X} ✓".format(verify_byte))
+                    else:
+                        sys.exit("ERROR: HAP write failed — byte 0x01DE still reads "
+                                 "0x{:02X} after write. Image may be read-only.".format(verify_byte))
                 else:
-                    sys.exit("ERROR: HAP write failed — byte 0x017E still reads "
-                             "0x{:02X} after write. Image may be read-only.".format(verify_byte))
+                    # PCH-P/N mobile (ThinkPads, ADL-P/N, RPL-P/H)
+                    print("Setting the HAP bit in PCHSTRP31 bit 16 (descriptor byte "
+                          "0x017E) to disable Intel ME...")
+                    print("  (Alder Lake / Raptor Lake PCH-P/N — Intel datasheet confirmed,"
+                          " Doc 648364)")
+                    fdf.write_to(0x17E, pack("B", 0x01))
+                    fdf.seek(0x17E)
+                    verify_byte = unpack("B", fdf.read(1))[0]
+                    if verify_byte & 0x01:
+                        print("  HAP write verified: byte 0x017E = 0x{:02X} ✓".format(verify_byte))
+                    else:
+                        sys.exit("ERROR: HAP write failed — byte 0x017E still reads "
+                                 "0x{:02X} after write. Image may be read-only.".format(verify_byte))
 
             elif gen == 8:
-                # Meteor Lake (ME 18) — HAP offset UNCONFIRMED. Do NOT write.
-                # MTL uses tile architecture — no PCH straps at fpsba+0x100.
-                # HAP likely in IOE Soft Straps but exact offset/bit unconfirmed.
-                print("WARNING: Meteor Lake (ME 18) HAP offset is unconfirmed.")
-                print("  MTL has no PCH straps at 0x100 (tile architecture).")
-                print("  HAP write SKIPPED to avoid corrupting your image.")
-                print("  To help confirm the MTL offset, please open a GitHub issue")
-                print("  with a before/after binary diff of your MTL firmware dump")
-                print("  after using Intel FIT to set the HAP bit.")
-                sys.exit("ME 18 (Meteor Lake) HAP write skipped — offset unconfirmed.")
+                # Meteor Lake (ME 18) — HAP at byte 0x21E
+                # Source: Dasharo coreboot me_spec_18.h HAP_OFFSET = 0x21E
+                #   (SOC_INTEL_METEORLAKE_U_H confirmed)
+                # Analysis: 0x21E = fpsba(0x1A0) + 0x7C(PCHSTRP31) + 0x02(bit 16)
+                # Same strap structure as ADL/RPL, fpsba shifted from 0x100 to 0x1A0
+                # EXPERIMENTAL — Dasharo source only, not confirmed from hardware dump
+                # or Intel MTL SPI Programming Guide. Use hap_diff.py to verify.
+                print("Setting the HAP bit for Meteor Lake (ME 18)...")
+                print("  Byte write to 0x21E (Dasharo coreboot me_spec_18.h source)")
+                print("  EXPERIMENTAL — run hap_diff.py on before/after to verify")
+                fdf.write_to(0x21E, pack("B", 0x01))
+                fdf.seek(0x21E)
+                verify_byte = unpack("B", fdf.read(1))[0]
+                if verify_byte & 0x01:
+                    print("  HAP write verified: byte 0x21E = 0x{:02X} ✓".format(verify_byte))
+                else:
+                    sys.exit("ERROR: HAP write failed — byte 0x21E bit 0 not set after write.")
 
             else:
                 print("Setting the AltMeDisable bit in PCHSTRP10 to disable "
