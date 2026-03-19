@@ -15,7 +15,7 @@
 [![Fork of](https://img.shields.io/badge/fork%20of-corna%2Fme__cleaner-lightgrey?style=flat-square)](https://github.com/corna/me_cleaner)
 [![Hardware Tested](https://img.shields.io/badge/hardware-tested%20%26%20flashed-success?style=flat-square)](https://github.com/MangoKiwiPlumGrape/me_cleaner_thinkpad)
 
-> Fork of [corna/me_cleaner](https://github.com/corna/me_cleaner) with correct HAP bit offsets for 8th–14th gen Intel platforms. Every offset is confirmed. If you have been using another fork and ME is still running after a flash, this is probably why.
+> Fork of [corna/me_cleaner](https://github.com/corna/me_cleaner) with correct HAP bit offsets for 8th–15th gen Intel platforms. Every offset is confirmed. If you have been using another fork and ME is still running after a flash, this is probably why.
 
 </div>
 
@@ -57,7 +57,8 @@ The LP vs H split for ME 12 and ME 15 is handled automatically. The tool reads b
 
 ## Usage
 
-Internal flashing is blocked on every modern ThinkPad and most other platforms from 8th gen onwards. You need an external SPI programmer — a CH341A with a SOIC8 clip is the standard setup.
+Internal flashing is blocked on every modern ThinkPad and most other platforms from 8th gen onwards. You need an external SPI programmer — a CH341A with a SOIC8 clip / WSON8 probe is the standard setup.
+
 
 **1. Find your chip**
 
@@ -72,8 +73,8 @@ It will print the detected chip name, e.g. `MX25L12835F`. If it errors or return
 **2. Read the chip — do this twice and verify they match**
 
 ```
-sudo flashrom -p ch341a_spi -c MX25L12835F -r stock_1.bin
-sudo flashrom -p ch341a_spi -c MX25L12835F -r stock_2.bin
+sudo flashrom -p ch341a_spi -c "MX25L12835F" -r stock_1.bin
+sudo flashrom -p ch341a_spi -c "MX25L12835F" -r stock_2.bin
 md5sum stock_1.bin stock_2.bin
 ```
 
@@ -104,13 +105,13 @@ Should print `The HAP bit is SET`.
 **6. Write**
 
 ```
-sudo flashrom -p ch341a_spi -c MX25L12835F -w patched.bin
+sudo flashrom -p ch341a_spi -c "MX25L12835F" -w patched.bin
 ```
 
 **7. Verify the write**
 
 ```
-sudo flashrom -p ch341a_spi -c MX25L12835F -v patched.bin
+sudo flashrom -p ch341a_spi -c "MX25L12835F" -v patched.bin
 ```
 
 After reboot: ME disappears from lspci, the BIOS ME version field goes blank, and any ME communication tool returns nothing. That is a successful disable.
@@ -133,8 +134,37 @@ ME 18 will not be written until the HAP offset is confirmed. MTL uses a tile arc
 
 ## Companion Tools
 
-- **[ifdtool-thinkpad](https://github.com/MangoKiwiPlumGrape/ifdtool_thinkpad)** — upstream ifdtool reads and writes the wrong strap on CNL/ICL/CML/TGL/RKL. Fixed for the same platform range as this fork.
-- **[intelmetool-thinkpad](https://github.com/MangoKiwiPlumGrape/intelmetool_thinkpad)** — upstream exits with "ME not present" on every post-7th gen machine due to missing device IDs. Fixed for 8th gen through Panther Lake.
+Once flashed, use these to verify and inspect the result.
+
+**[ifdtool_thinkpad](https://github.com/MangoKiwiPlumGrape/ifdtool_thinkpad)** reads and dumps the flash descriptor correctly on modern platforms. Upstream ifdtool reports HAP as not set even on a correctly patched image because it checks the wrong strap. Use the `-d` flag with your platform specified:
+
+```
+./ifdtool -d -p cml dump.bin    # Comet Lake
+./ifdtool -d -p tgl dump.bin    # Tiger Lake LP
+./ifdtool -d -p rkl dump.bin    # Tiger Lake H / Rocket Lake H
+./ifdtool -d -p adl dump.bin    # Alder Lake
+./ifdtool -d -p rpl dump.bin    # Raptor Lake
+```
+
+This will show the HAP bit status, flash descriptor region permissions, and master access settings — useful for confirming the descriptor is locked correctly after flashing.
+
+**[intelmetool_thinkpad](https://github.com/MangoKiwiPlumGrape/intelmetool_thinkpad)** queries live ME status after boot. Upstream exits with "ME not present" on every post-7th gen machine. Run it after reboot to confirm ME is in soft-disable state:
+
+```
+sudo ./intelmetool -m
+```
+
+With HAP set correctly it will show `Current Operation Mode: Soft Temporary Disable`.
+
+**Note:** if you intend to also run [intel-me-disable](https://github.com/MangoKiwiPlumGrape/intel-me-disable) (OS-level ME kernel driver blacklist), do so *after* running intelmetool — on ME 12+ it kills all MEI bus communication and intelmetool will have nothing to talk to. Run it last once you have confirmed the HAP state, or use it as a standalone option if you cannot flash externally.
+
+---
+
+## Disclaimer
+
+This tool modifies firmware. A bad flash can brick your machine. Read the chip twice, verify the md5, verify after writing, and keep your stock backup somewhere safe before you do anything.
+
+This is firmware research provided as-is. I am not responsible for bricked hardware, data loss, or any other outcome. You are responsible for understanding what you are doing before you do it. If you are not comfortable working with a programmer and a chip clip, this is not the right starting point.
 
 ---
 
