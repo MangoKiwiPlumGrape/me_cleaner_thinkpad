@@ -1305,7 +1305,9 @@ if __name__ == "__main__":
                     print("Setting the HAP bit in PCHSTRP55 bit 16 (descriptor byte "
                           "0x01DE) to disable Intel ME...")
                     print("  (Alder Lake PCH-S desktop — Dasharo me_spec_16.h confirmed)")
-                    fdf.write_to(0x1DE, pack("B", 0x01))
+                    fdf.seek(0x1DE)
+                    orig_byte_s = unpack("B", fdf.read(1))[0]
+                    fdf.write_to(0x1DE, pack("B", orig_byte_s | 0x01))
                     fdf.seek(0x1DE)
                     verify_byte = unpack("B", fdf.read(1))[0]
                     if verify_byte & 0x01:
@@ -1319,7 +1321,9 @@ if __name__ == "__main__":
                           "0x017E) to disable Intel ME...")
                     print("  (Alder Lake / Raptor Lake PCH-P/N — Intel datasheet confirmed,"
                           " Doc 648364)")
-                    fdf.write_to(0x17E, pack("B", 0x01))
+                    fdf.seek(0x17E)
+                    orig_byte_pn = unpack("B", fdf.read(1))[0]
+                    fdf.write_to(0x17E, pack("B", orig_byte_pn | 0x01))
                     fdf.seek(0x17E)
                     verify_byte = unpack("B", fdf.read(1))[0]
                     if verify_byte & 0x01:
