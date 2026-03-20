@@ -79,8 +79,8 @@
 #     (Z390/H370 desktop boards use fpsba+0x80).
 #
 # Confirmed hardware:
-#   8th  gen ThinkPad (ME 12, CFL-U)      — fpsba+0x70 PCHSTRP28 bit 16  ✓ hw confirmed
-#   10th gen ThinkPad X13 (ME 14, CML-U)  — fpsba+0x70 PCHSTRP28 bit 16  ✓ hw confirmed
+#   8th  Gen ThinkPad (ME 12, CFL-U)      — fpsba+0x70 PCHSTRP28 bit 16  ✓ hw confirmed
+#   10th Gen ThinkPad  (ME 14, CML-U)  — fpsba+0x70 PCHSTRP28 bit 16  ✓ hw confirmed
 #   Ice Lake (ME 13)                       — fpsba+0x70 PCHSTRP28 bit 16  ✓ datasheet confirmed (Doc 615170)
 #   Tiger Lake LP (ME 15)                  — fpsba+0x7C PCHSTRP31 bit 16  ✓ datasheet confirmed (TGL-LP SPI Guide, archive.org)
 #   RKL-H / TGL-H (ME 15)                — fpsba+0x94 PCHSTRP37 bit 16  ✓ datasheet confirmed (RKL-H SPI Guide, archive.org)
@@ -90,7 +90,7 @@
 #   Raptor Lake (ME 16.1)                  — fpsba+0x7C PCHSTRP31 bit 16  ✓ community confirmed
 #   Meteor Lake (ME 18)                    — WARNING: descriptor layout changed, HAP UNCONFIRMED
 #                                            No PCH Straps at 0x100 on MTL. IOE Soft Straps at
-#                                            0xCAC. Current gen 7 path (0x017E) is WRONG for MTL.
+#                                            0xCAC. Current gen 7 path (0x017E) is WRONG for MTL. Use experimental and report back results.
 # ============================================================
 
 from __future__ import division, print_function
