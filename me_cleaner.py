@@ -67,7 +67,8 @@
 #       15 → gen 6  (TGL-LP: fpsba+0x7C PCHSTRP31 / RKL-H+TGL-H: fpsba+0x94 PCHSTRP37, datasheet confirmed)
 #       16 → gen 7  (Alder Lake, PCHSTRP31 bit 16, Intel datasheet confirmed)
 #       16.1→ gen 7  (Raptor Lake, same as ADL)
-#       18 → gen 7  (MTL — PLACEHOLDER ONLY, HAP path unconfirmed, see point 6)
+#       18 → gen 8  (MTL — HAP writee skipped, offset unconfirmed, see point 6)
+
 #
 #  8. IFWI firmware (gen >= 4): module removal is skipped with a clear
 #     warning. HAP bit is still set correctly. Attempting partition
