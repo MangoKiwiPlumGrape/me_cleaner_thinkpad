@@ -68,7 +68,6 @@
 #       16 → gen 7  (Alder Lake, PCHSTRP31 bit 16, Intel datasheet confirmed)
 #       16.1→ gen 7  (Raptor Lake, same as ADL)
 #       18 → gen 8  (MTL — HAP write skipped, offset unconfirmed, see point 6)
-
 #
 #  8. IFWI firmware (gen >= 4): module removal is skipped with a clear
 #     warning. HAP bit is still set correctly. Attempting partition
@@ -80,8 +79,8 @@
 #     (Z390/H370 desktop boards use fpsba+0x80).
 #
 # Confirmed hardware:
-#   8th  Gen ThinkPad (ME 12, CFL-U)      — fpsba+0x70 PCHSTRP28 bit 16  ✓ hw confirmed
-#   10th Gen ThinkPad  (ME 14, CML-U)  — fpsba+0x70 PCHSTRP28 bit 16  ✓ hw confirmed
+#   8th  gen ThinkPad (ME 12, CFL-U)      — fpsba+0x70 PCHSTRP28 bit 16  ✓ hw confirmed
+#   10th gen ThinkPad X13 (ME 14, CML-U)  — fpsba+0x70 PCHSTRP28 bit 16  ✓ hw confirmed
 #   Ice Lake (ME 13)                       — fpsba+0x70 PCHSTRP28 bit 16  ✓ datasheet confirmed (Doc 615170)
 #   Tiger Lake LP (ME 15)                  — fpsba+0x7C PCHSTRP31 bit 16  ✓ datasheet confirmed (TGL-LP SPI Guide, archive.org)
 #   RKL-H / TGL-H (ME 15)                — fpsba+0x94 PCHSTRP37 bit 16  ✓ datasheet confirmed (RKL-H SPI Guide, archive.org)
@@ -91,7 +90,7 @@
 #   Raptor Lake (ME 16.1)                  — fpsba+0x7C PCHSTRP31 bit 16  ✓ community confirmed
 #   Meteor Lake (ME 18)                    — WARNING: descriptor layout changed, HAP UNCONFIRMED
 #                                            No PCH Straps at 0x100 on MTL. IOE Soft Straps at
-#                                            0xCAC. Current gen 7 path (0x017E) is WRONG for MTL. Use experimental and report back results.
+#                                            0xCAC. Current gen 7 path (0x017E) is WRONG for MTL.
 # ============================================================
 
 from __future__ import division, print_function
@@ -734,7 +733,51 @@ if __name__ == "__main__":
             gen = 1
 
     else:
-        sys.exit("Unknown image")
+        # Descriptor not found at offset 0x00 or 0x10.
+        # Scan for it at 4KB-aligned page boundaries + 0x10 (e.g. recovery/backup
+        # chips where the descriptor page is offset into the image — GigaDevice
+        # backup chips on dual-chip ThinkPads have descriptor at 0x100010).
+        desc_fd_sig = b"\x5a\xa5\xf0\x0f"
+        found_offset = None
+        f.seek(0, 2)
+        file_size = f.tell()
+        for page_base in range(0x1000, min(file_size, 0x800000), 0x1000):
+            f.seek(page_base + 0x10)
+            candidate = f.read(4)
+            if candidate == desc_fd_sig:
+                found_offset = page_base + 0x10
+                break
+
+        if found_offset is not None:
+            print("Full image detected "
+                  "(non-standard descriptor offset {:#x} — backup/recovery chip)"
+                  .format(found_offset))
+            # Parse FLMAP from the found descriptor location
+            # Offsets are relative to the descriptor page base (found_offset & ~0xFFF)
+            desc_base = found_offset & ~0xFFF
+            f.seek(found_offset + 0x4)
+            flmap0, flmap1, flmap2 = unpack("<III", f.read(0xc))
+            frba  = (flmap0 >> 12 & 0xff0) + desc_base
+            fmba  = ((flmap1 & 0xff) << 4) + desc_base
+            fisba = (flmap1 >> 12 & 0xff0) + desc_base
+            fmsba = ((flmap2 & 0xff) << 4) + desc_base
+            fpsba_from_descriptor = (((flmap1 >> 16) & 0xFF) << 4) + desc_base
+            fpsba = fisba
+
+            f.seek(frba)
+            flreg = unpack("<III", f.read(12))
+
+            fd_start, fd_end = flreg_to_start_end(flreg[0])
+            bios_start, bios_end = flreg_to_start_end(flreg[1])
+            me_start, me_end = flreg_to_start_end(flreg[2])
+
+            if me_start >= me_end:
+                print("  No ME region found in backup chip — HAP write will"
+                      " still proceed via descriptor")
+            else:
+                mef = RegionFile(f, me_start, me_end)
+        else:
+            sys.exit("Unknown image")
 
     if me_start < me_end:
         medata = mef.readall()
@@ -872,8 +915,12 @@ if __name__ == "__main__":
         #   PCH-S vs PCH-P/N detected via heuristic (same pattern as gen 4/6)
         #   Dasharo me_spec_16.h: HAP_OFFSET=0x17E (P/N) / 0x1DE (S)
         #   Alder Lake / Raptor Lake — datasheet confirmed Doc 648364/743835
-        # gen 8: ME 18     — Meteor Lake PLACEHOLDER, no write performed
-        #   MTL tile architecture, no PCH straps at 0x100, HAP offset unconfirmed
+        # gen 8: ME 18     — Meteor Lake, HAP write skipped (main branch)
+        #   Candidate offset: byte 0x21E (Dasharo coreboot me_spec_18.h:
+        #   HAP_OFFSET=0x21E for SOC_INTEL_METEORLAKE_U_H)
+        #   = fpsba(0x1A0) + 0x7C + 0x02 = PCHSTRP31 bit 16 equivalent
+        #   Not yet confirmed from hardware dump or Intel MTL SPI guide.
+        #   Use experimental branch to attempt the write.
         # --------------------------------------------------------
         ME_VERSION_MAP = {
             12: 4,   # Cannon/Whiskey Lake LP (ME 12)     — hw confirmed
@@ -1021,9 +1068,14 @@ if __name__ == "__main__":
                   " (PCHSTRP31 bit 16 via 0x017E — ADL/RPL datasheet confirmed)")
 
         elif gen == 8:
-            # Meteor Lake (ME 18) — HAP offset unconfirmed, cannot check reliably.
-            print("WARNING: Meteor Lake (ME 18) HAP bit status cannot be determined.")
-            print("  MTL has no PCH straps at 0x100. HAP offset unconfirmed.")
+            # Meteor Lake (ME 18) — candidate offset byte 0x21E
+            # Source: Dasharo coreboot me_spec_18.h: HAP_OFFSET=0x21E (MTL U/H)
+            # = fpsba(0x1A0) + 0x7C + 0x02, same PCHSTRP31 bit 16 pattern as ADL
+            # Not confirmed from hardware or Intel SPI guide — write skipped in main.
+            # Use experimental branch to attempt the 0x21E write.
+            print("WARNING: Meteor Lake (ME 18) HAP write skipped in main branch.")
+            print("  Candidate offset: byte 0x21E (Dasharo me_spec_18.h source).")
+            print("  Use experimental branch to attempt the write on MTL hardware.")
 
         else:
             fdf.seek(fpsba)
@@ -1300,13 +1352,14 @@ if __name__ == "__main__":
                              "0x{:02X} after write. Image may be read-only.".format(verify_byte))
 
             elif gen == 8:
-                # Meteor Lake (ME 18) — HAP offset UNCONFIRMED. Do NOT write.
-                # MTL uses tile architecture — no PCH straps at fpsba+0x100.
-                # HAP likely in IOE Soft Straps but exact offset/bit unconfirmed.
-                # Writing to the wrong offset could corrupt the image.
-                print("WARNING: Meteor Lake (ME 18) HAP offset is unconfirmed.")
-                print("  MTL has no PCH straps at 0x100 (tile architecture).")
-                print("  HAP write SKIPPED to avoid corrupting your image.")
+                # Meteor Lake (ME 18) — candidate offset byte 0x21E
+                # Source: Dasharo coreboot me_spec_18.h: HAP_OFFSET=0x21E
+                #   (SOC_INTEL_METEORLAKE_U_H) = fpsba(0x1A0) + 0x7C + 0x02
+                # Not confirmed from hardware dump or Intel MTL SPI guide.
+                # Write skipped in main — use experimental branch for MTL.
+                print("WARNING: Meteor Lake (ME 18) HAP write skipped.")
+                print("  Candidate offset: byte 0x21E (Dasharo me_spec_18.h source).")
+                print("  Use the experimental branch to attempt the write on MTL.")
                 print("  To help confirm the MTL offset, please open a GitHub issue")
                 print("  with a before/after binary diff of your MTL firmware dump")
                 print("  after using Intel FIT to set the HAP bit.")
