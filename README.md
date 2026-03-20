@@ -6,7 +6,7 @@
 </div>
 
 
-### Confirmed Intel ME disable for 8th–15th gen Intel platforms
+### Confirmed Intel ME disable for 8th–16th gen Intel platforms
 
 [![ME 12](https://img.shields.io/badge/ME%2012-confirmed-brightgreen?style=flat-square&logo=intel)](https://github.com/MangoKiwiPlumGrape/me_cleaner_thinkpad)
 [![ME 13](https://img.shields.io/badge/ME%2013-confirmed-brightgreen?style=flat-square&logo=intel)](https://github.com/MangoKiwiPlumGrape/me_cleaner_thinkpad)
@@ -19,7 +19,7 @@
 [![Fork of](https://img.shields.io/badge/fork%20of-corna%2Fme__cleaner-lightgrey?style=flat-square)](https://github.com/corna/me_cleaner)
 [![Hardware Tested](https://img.shields.io/badge/hardware-tested%20%26%20flashed-success?style=flat-square)](https://github.com/MangoKiwiPlumGrape/me_cleaner_thinkpad)
 
-> Fork of [corna/me_cleaner](https://github.com/corna/me_cleaner) with correct HAP bit offsets for 8th–15th gen Intel platforms. Every offset is confirmed. If you have been using another fork and ME is still running after a flash, this is probably why.
+> Fork of [corna/me_cleaner](https://github.com/corna/me_cleaner) with correct HAP bit offsets for 8th–16th gen Intel platforms. Every offset is confirmed. If you have been using another fork and ME is still running after a flash, this is probably why.
 
 </div>
 
@@ -53,7 +53,7 @@ The original me_cleaner v1.2 and most forks silently write the HAP bit to the wr
 | ME 15 H | Tiger Lake H / Rocket Lake H | PCHSTRP37 — `fpsba+0x94` bit 16 |
 | ME 16 | Alder Lake (12th gen) | PCHSTRP31 — `fpsba+0x7C` bit 16 |
 | ME 16.1 | Raptor Lake (13th gen) | PCHSTRP31 — `fpsba+0x7C` bit 16 |
-| ME 18 | Meteor Lake (14th gen) | Unknown — write skipped |
+| ME 18 | Meteor Lake (14th gen) | Unknown — write skipped on stable branch / Experimental support for ME 18 is in the `experimental/` folder — use at your own risk. |
 
 The LP vs H split for ME 12 and ME 15 is handled automatically. The tool reads both candidate straps and selects the correct one based on which register is populated on the target platform.
 
