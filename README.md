@@ -19,6 +19,7 @@
 
 </div>
 
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/MangoKiwiPlumGrape/me_cleaner_thinkpad)
 ---
 
 ## The Problem With Other Forks
