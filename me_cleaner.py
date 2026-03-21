@@ -752,6 +752,11 @@ if __name__ == "__main__":
             print("Full image detected "
                   "(non-standard descriptor offset {:#x} — backup/recovery chip)"
                   .format(found_offset))
+            print("  WARNING: non-standard descriptor detected — this is likely a")
+            print("  recovery/backup chip (e.g. GigaDevice on dual-chip ThinkPads).")
+            print("  On some platforms the EC enforces integrity checks on this chip.")
+            print("  Patching may cause boot failure on machines with EC-verified recovery.")
+            print("  Confirm your platform supports this before flashing the output.")
             # Parse FLMAP from the found descriptor location
             # Offsets are relative to the descriptor page base (found_offset & ~0xFFF)
             desc_base = found_offset & ~0xFFF
