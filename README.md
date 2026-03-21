@@ -235,4 +235,3 @@ Original me_cleaner by Nicola Corna — Copyright (C) 2016–2018. License: GNU 
 ME 12 H-series offset: PR#282.
 ME 15/16 initial work: XutaxKamay.
 ME 13/14 corrections, ME 15 H-series, ME 16/16.1 confirmation, JSL/CML-S/EHL support, dual-chip GigaDevice support, ADL-S/RPL-S PCH-S discriminator: this fork.
-HAP offsets cross-referenced against Dasharo coreboot `me_spec_*.h` and coreboot gerrit 88310.
