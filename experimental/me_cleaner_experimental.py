@@ -1051,17 +1051,33 @@ if __name__ == "__main__":
                       " (PCHSTRP31 bit 16 — TGL-LP platform assumed)")
 
         elif gen == 7:
-            # ADL/RPL (ME 16/16.1): PCHSTRP31 bit 16 via byte 0x017E
-            # Datasheet confirmed: Doc 648364 (ADL-P/N), Doc 743835 (RPL)
-            # NOTE: ADL PCH-S desktop (Z690/H670/B660) uses 0x01DE instead.
-            # No reliable runtime heuristic exists to distinguish PCH-S from
-            # PCH-P/N — dword at 0x1DC is populated on both. ADL-S is a known
-            # gap; mobile platforms (ThinkPads, ADL-P/N/RPL) are correct here.
-            fdf.seek(0x17E)
-            fd_hap_byte = unpack("B", fdf.read(1))[0]
-            print("The HAP bit is " +
-                  ("SET" if fd_hap_byte & 0x01 else "NOT SET") +
-                  " (PCHSTRP31 bit 16 via 0x017E — ADL/RPL datasheet confirmed)")
+            # ADL/RPL (ME 16/16.1) — two PCH variants:
+            #   ADL-P/N/RPL-P: PCHSTRP31 bit 16 via byte 0x017E
+            #     Datasheet confirmed: Doc 648364 (ADL-P/N), Doc 743835 (RPL)
+            #     Dasharo me_spec_16.h: HAP_OFFSET=0x17E (SOC_INTEL_ALDERLAKE_PCH_P/N)
+            #   ADL-S B0/RPL-S: PCHSTRP55 bit 16 via byte 0x01DE (fpsba+0xDC)
+            #     Dasharo me_spec_16.h: HAP_OFFSET=0x1DE (SOC_INTEL_ALDERLAKE_PCH_S)
+            # Discriminator: fpsba+0xD0 == 0x10081008 → ADL-S/RPL-S desktop
+            #                fpsba+0xD0 == 0x00000300 → ADL-P/N/RPL-P mobile
+            # Source: coreboot gerrit 88310 ifdtool.c ifd2_platform_get_hap_location()
+            fdf.seek(fpsba + 0xD0)
+            d0_val = unpack("<I", fdf.read(4))[0]
+            if d0_val == 0x10081008:
+                # ADL-S B0 step / RPL-S desktop
+                fdf.seek(0x1DE)
+                fd_hap_byte = unpack("B", fdf.read(1))[0]
+                print("The HAP bit is " +
+                      ("SET" if fd_hap_byte & 0x01 else "NOT SET") +
+                      " (PCHSTRP55 bit 16 via 0x01DE — ADL-S/RPL-S desktop,"
+                      " coreboot gerrit 88310 confirmed)")
+            else:
+                # ADL-P/N/RPL-P mobile (default — ThinkPads etc)
+                fdf.seek(0x17E)
+                fd_hap_byte = unpack("B", fdf.read(1))[0]
+                print("The HAP bit is " +
+                      ("SET" if fd_hap_byte & 0x01 else "NOT SET") +
+                      " (PCHSTRP31 bit 16 via 0x017E — ADL/RPL PCH-P/N,"
+                      " datasheet confirmed Doc 648364)")
 
         elif gen == 8:
             # Meteor Lake (ME 18) — HAP at absolute offset 0x21E (byte write)
@@ -1330,25 +1346,46 @@ if __name__ == "__main__":
                         sys.exit("ERROR: HAP write failed — PCHSTRP31 bit 16 not set after write.")
 
             elif gen == 7:
-                # ADL/RPL (ME 16/16.1): PCHSTRP31 bit 16 via byte 0x017E
-                # Datasheet confirmed: Doc 648364 (ADL-P/N), Doc 743835 (RPL)
-                # NOTE: ADL PCH-S desktop (Z690/H670/B660) uses 0x01DE (PCHSTRP55).
-                # No reliable runtime heuristic to auto-detect PCH-S vs PCH-P/N —
-                # dword at 0x1DC is populated on both platforms. ADL-S desktop is a
-                # known gap. Mobile (ThinkPads, ADL-P/N, RPL-P/H) are correct here.
-                print("Setting the HAP bit in PCHSTRP31 bit 16 (descriptor byte "
-                      "0x017E) to disable Intel ME...")
-                print("  (Alder Lake / Raptor Lake — Intel datasheet confirmed, Doc 648364)")
-                fdf.seek(0x17E)
-                orig_byte = unpack("B", fdf.read(1))[0]
-                fdf.write_to(0x17E, pack("B", orig_byte | 0x01))
-                fdf.seek(0x17E)
-                verify_byte = unpack("B", fdf.read(1))[0]
-                if verify_byte & 0x01:
-                    print("  HAP write verified: byte 0x017E = 0x{:02X} ✓".format(verify_byte))
+                # ADL/RPL (ME 16/16.1) — PCH-S vs PCH-P/N discrimination
+                # Discriminator: fpsba+0xD0 == 0x10081008 → ADL-S B0/RPL-S desktop
+                #                fpsba+0xD0 == 0x00000300 → ADL-P/N/RPL-P mobile
+                # Source: coreboot gerrit 88310 ifdtool.c ifd2_platform_get_hap_location()
+                # Verified against T14 Gen3 ADL-P dump: fpsba+0xD0=0x300 → 0x17E ✓
+                fdf.seek(fpsba + 0xD0)
+                d0_val = unpack("<I", fdf.read(4))[0]
+                if d0_val == 0x10081008:
+                    # ADL-S B0 step / RPL-S desktop (Z690/H670/B660)
+                    # HAP at PCHSTRP55 bit 16 — byte 0x01DE
+                    print("Setting the HAP bit in PCHSTRP55 bit 16 (descriptor byte "
+                          "0x01DE) to disable Intel ME...")
+                    print("  (Alder Lake S / Raptor Lake S desktop — coreboot gerrit 88310)")
+                    fdf.seek(0x1DE)
+                    orig_byte = unpack("B", fdf.read(1))[0]
+                    fdf.write_to(0x1DE, pack("B", orig_byte | 0x01))
+                    fdf.seek(0x1DE)
+                    verify_byte = unpack("B", fdf.read(1))[0]
+                    if verify_byte & 0x01:
+                        print("  HAP write verified: byte 0x01DE = 0x{:02X} ✓".format(verify_byte))
+                    else:
+                        sys.exit("ERROR: HAP write failed — byte 0x01DE still reads "
+                                 "0x{:02X} after write. Image may be read-only.".format(verify_byte))
                 else:
-                    sys.exit("ERROR: HAP write failed — byte 0x017E still reads "
-                             "0x{:02X} after write. Image may be read-only.".format(verify_byte))
+                    # ADL-P/N / RPL-P mobile (ThinkPads, laptops)
+                    # HAP at PCHSTRP31 bit 16 — byte 0x017E
+                    print("Setting the HAP bit in PCHSTRP31 bit 16 (descriptor byte "
+                          "0x017E) to disable Intel ME...")
+                    print("  (Alder Lake / Raptor Lake PCH-P/N — Intel datasheet confirmed,"
+                          " Doc 648364)")
+                    fdf.seek(0x17E)
+                    orig_byte = unpack("B", fdf.read(1))[0]
+                    fdf.write_to(0x17E, pack("B", orig_byte | 0x01))
+                    fdf.seek(0x17E)
+                    verify_byte = unpack("B", fdf.read(1))[0]
+                    if verify_byte & 0x01:
+                        print("  HAP write verified: byte 0x017E = 0x{:02X} ✓".format(verify_byte))
+                    else:
+                        sys.exit("ERROR: HAP write failed — byte 0x017E still reads "
+                                 "0x{:02X} after write. Image may be read-only.".format(verify_byte))
 
             elif gen == 8:
                 # Meteor Lake (ME 18) — HAP at byte 0x21E
