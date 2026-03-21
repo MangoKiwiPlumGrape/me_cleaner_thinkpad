@@ -102,8 +102,8 @@ sudo flashrom -p ch341a_spi
 **2. Read the chip twice and verify both reads match**
 
 ```
-sudo flashrom -p ch341a_spi -c "CHIP" -r stock_1.bin
-sudo flashrom -p ch341a_spi -c "CHIP" -r stock_2.bin
+sudo flashrom -p ch341a_spi -c "CHIP-NAME" -r stock_1.bin
+sudo flashrom -p ch341a_spi -c "CHIP-NAME" -r stock_2.bin
 md5sum stock_1.bin stock_2.bin
 ```
 
@@ -134,13 +134,13 @@ Should print `The HAP bit is SET`.
 **6. Write**
 
 ```
-sudo flashrom -p ch341a_spi -c "CHIP" -w patched.bin
+sudo flashrom -p ch341a_spi -c "CHIP-NAME" -w patched.bin
 ```
 
 **7. Verify the write**
 
 ```
-sudo flashrom -p ch341a_spi -c "CHIP" -v patched.bin
+sudo flashrom -p ch341a_spi -c "CHIP-NAME" -v patched.bin
 ```
 
 After reboot: ME disappears from lspci, the BIOS ME version field goes blank, and any ME communication tool returns nothing.
